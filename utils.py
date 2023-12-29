@@ -1,5 +1,5 @@
 from emoji import UNICODE_EMOJI
-from const import RUWORDNET_PATH
+from config.const import RUWORDNET_PATH
 from emoji import UNICODE_EMOJI
 import pymorphy2
 from functools import lru_cache
@@ -8,11 +8,11 @@ from ruwordnet import RuWordNet
 
 def is_lat(s):
     for char in s:
-        if char.isalpha() or char.isdigit() or char == " " or char == "-" or char == ':':
+        if char.isalpha() or char.isdigit() or char == " " or char == "-" or char == ':' or char=='(' or char==')' and (char not in UNICODE_EMOJI):
             pass
         else:
             return False
-    return not(s in UNICODE_EMOJI)
+    return True
 
 
 def my_split(x):

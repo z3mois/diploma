@@ -1,5 +1,5 @@
 import pandas as pd
-from const import DAMP_OF_WIKIDATA_PATh, GOLD_DATA, GOLD_WIKIDATA_DATASET
+from config.const import DAMP_OF_WIKIDATA_PATH, GOLD_DATA, GOLD_WIKIDATA_DATASET
 from os import listdir
 from os.path import isfile, join
 import json
@@ -9,11 +9,11 @@ import numpy as np
 def main():
     data = pd.read_csv(GOLD_DATA)
     data_wiki_title = set([elem.lower() for elem in data['wiki_title_gold'].values])
-    onlyfiles = [f for f in listdir(DAMP_OF_WIKIDATA_PATh) if isfile(join(DAMP_OF_WIKIDATA_PATh, f))]
+    onlyfiles = [f for f in listdir(DAMP_OF_WIKIDATA_PATH) if isfile(join(DAMP_OF_WIKIDATA_PATH, f))]
 
     dict_wiki_to_wikidata = {}
     for file in onlyfiles:
-        with open(f'{DAMP_OF_WIKIDATA_PATh}\\{file}', 'r', encoding='utf-8') as f:
+        with open(f'{DAMP_OF_WIKIDATA_PATH}\\{file}', 'r', encoding='utf-8') as f:
             for line in f:
                 info = json.loads(line)
                 if info['label'] and info['sitelinks'] and  'ruwiki' in info['sitelinks']:
