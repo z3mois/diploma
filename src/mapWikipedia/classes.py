@@ -64,7 +64,7 @@ class WikiSynset():
 
 
 @dataclass
-class display:
+class Mapping:
     id:int
     revid:int
     title:str
@@ -72,8 +72,8 @@ class display:
     wordId:int
     ctxW:set
     first_sentense:str
-class displayEncoder(json.JSONEncoder):
+class MappingEncoder(json.JSONEncoder):
     def default(self, obj):
-        if isinstance(obj, display):
+        if isinstance(obj, Mapping):
             return obj.__dict__
         return json.JSONEncoder.default(self, obj)

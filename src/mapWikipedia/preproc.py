@@ -4,11 +4,21 @@ import os.path
 import re
 from tqdm import tqdm
 import pickle
-from .classes import Page, WikiSynset
+from .classes import Page, WikiSynset, WnCtx
 from  .extractor import Extractor
-from  .utils_local import wn, get_normal_form, clear_title, includeTitleInWn, read_pkl, write_pkl
-from config.const import PATH_TO_TMP_FILE
+from  .utils_local import (
+    wn, 
+    get_normal_form,
+    clear_title,
+    includeTitleInWn,
+    read_pkl,
+    write_pkl,
+    my_split
+)
+from ruwordnet import RuWordNet
+from config.const import PATH_TO_TMP_FILE, PATH_TO_WN_XML
 from typing import List, Tuple, Dict
+from xml.dom import minidom
 
 acceptedNamespaces = ['w', 'wiktionary', 'wikt']
 templateNamespace = ''
@@ -90,7 +100,7 @@ def decode_open(filename, mode='rt', encoding='utf-8'):
         return open(filename, mode, encoding=encoding)
 
 
-def extract_cat(text) -> List:
+def extract_cat(text) -> List[str]:
     """
     Find categories in text wikipedia page
     :param text: text wikipedia page.
@@ -99,7 +109,7 @@ def extract_cat(text) -> List:
     return matcher.findall(text)
 
 
-def extract_links(text:str) -> List:
+def extract_links(text:str) -> List[str]:
     """
     Find links in text wikipedia page
     :param text: text wikipedia page.
@@ -108,7 +118,7 @@ def extract_links(text:str) -> List:
     return matcher.findall(text)
 
 
-def extract_first_links(text:str) -> List:
+def extract_first_links(text:str) -> List[str]:
     """
     Find first links in every paragraph in text wikipedia page
     :param text: text wikipedia page.
@@ -120,6 +130,34 @@ def extract_first_links(text:str) -> List:
         if len(item) > 0:
             answer.append(item[0])
     return answer
+
+
+def extractCtxS(wn:RuWordNet, lemma:str)-> set[str]:
+    '''
+    Find conetext of synset
+    :param 
+        wn: RuWordNet,
+        lemma: synset lemma        
+    '''
+    ctx_s = set()
+    #synonymy
+    for sense in wn.get_synsets(lemma):
+        for synonymy in sense.senses:
+            ctx_s.update(my_split(synonymy.lemma).split(","))
+    #Hypernymy/Hyponymy
+    for sense in wn.get_senses(lemma):
+        for hypernyms in sense.synset.hypernyms:
+            ctx_s.update(my_split(hypernyms.title).split(","))
+    for sense in wn.get_senses(lemma):
+        for hyponyms in sense.synset.hyponyms:
+            ctx_s.update(my_split(hyponyms.title).split(","))
+    #Sisterhood:
+    for sense in wn.get_senses(lemma):
+        for hypernyms in sense.synset.hypernyms:
+            for sister in hypernyms.hyponyms:
+                ctx_s.update(my_split(sister.title).split(","))
+    return ctx_s
+
 
 def read_dump(path:str, mode:str = 'read') -> Tuple[List[Page], Dict[str, List[Page]], Dict[str, List[str]]]:
     """
@@ -211,7 +249,7 @@ def create_wikisynset(pages:List[Page]=None, dictPageRedirect:Dict[str, List[Pag
         Creata special list of wikisynset
         param page: list of Page wikipedia,
             dictPageRedirect: displaying from the page to all referenced ones
-            mode: type of to do(read or overwrite), if mode==oveewrite u can use wiki=create_wikisynset()
+            mode: type of to do(read or overwrite), if mode==overwrite you can use wiki=create_wikisynset()
         return:
             wiki: list of WikiSynset
     '''
@@ -220,7 +258,7 @@ def create_wikisynset(pages:List[Page]=None, dictPageRedirect:Dict[str, List[Pag
         meaningPageCounter = 0
         multiPageCounter = 0
         includeTitle = 0
-        all_senses = set([' '.join([get_normal_form(w).upper() for w in s.lemma.split()]) for s in wn.senses])
+        all_senses = set([' '.join([get_normal_form(w) for w in s.lemma.split()]) for s in wn.senses])
         hashDict = {}
         print('Start create hash')
         for index in tqdm(range(len(pages)-1)):
@@ -266,4 +304,37 @@ def create_wikisynset(pages:List[Page]=None, dictPageRedirect:Dict[str, List[Pag
         wiki=read_pkl(path=PATH_TO_TMP_FILE+'WikiSynset.pkl')
         print("Successful reading")
     return wiki
+
+def create_info_about_sense(mode:str='read')->Dict[str, WnCtx]:
+    '''
+        Parse file with all sense in RuWordNet and create dict from synset_id in context thos synset
+        param:
+            mode: read or overwrite
+    '''
+    if mode != 'read':
+        mydoc = minidom.parse(PATH_TO_WN_XML)
+        items = mydoc.getElementsByTagName('sense')
+        countWn = 0
+        dictWn = {}
+        print('Start to read file and find synset')
+        for elem in tqdm(items):
+            countWn +=1
+            text = elem.attributes['name'].value
+            text_id = elem.attributes["id"].value
+            lemma = elem.attributes["lemma"].value
+            ctx_s = extractCtxS(wn, lemma)
+            ctx = set()
+            for ctx_elem in ctx_s:
+                ctx.add(" ".join([get_normal_form(word) for word in ctx_elem.split()]))
+            dictWn[text_id] = WnCtx(text_id, ctx, lemma, text)
+        print('finish extract data ')
+        print("Start writing in file")
+        write_pkl(dictWn, path=PATH_TO_TMP_FILE+'ctxS.pkl')
+        print("Successful recording")
+    else:
+        print("Start reading from file")
+        dictWn=read_pkl(path=PATH_TO_TMP_FILE+'ctxS.pkl')
+        print("Successful reading")
+    return dictWn
+
     

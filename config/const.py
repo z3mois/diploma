@@ -7,3 +7,4 @@ ALL_STRAIGHT_GRAPH = "D:\\lbase_data\\all_straight_graph.pickle"
 ALL_INVERSE_GRAPH = "D:\\lbase_data\\all_inverse_graph.pickle"
 ALL_NEED_ARTICLE = "D:\\lbase_data\\all_need_article.pickle"
 PATH_TO_TMP_FILE = "E:\\data_diplom\\"
+PATH_TO_WN_XML='D:\\asd\\rwn-2021-05-02/senses.N.xml'
