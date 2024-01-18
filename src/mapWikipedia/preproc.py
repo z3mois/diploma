@@ -3,7 +3,6 @@ import bz2
 import os.path
 import re
 from tqdm import tqdm
-import pickle
 from .classes import Page, WikiSynset, WnCtx
 from  .extractor import Extractor
 from  .utils_local import (
@@ -258,7 +257,7 @@ def create_wikisynset(pages:List[Page]=None, dictPageRedirect:Dict[str, List[Pag
         meaningPageCounter = 0
         multiPageCounter = 0
         includeTitle = 0
-        all_senses = set([' '.join([get_normal_form(w) for w in s.lemma.split()]) for s in wn.senses])
+        all_senses = set([' '.join([get_normal_form(w) for w in s.lemma.lower().split()]) for s in wn.senses])
         hashDict = {}
         print('Start create hash')
         for index in tqdm(range(len(pages)-1)):
@@ -305,7 +304,7 @@ def create_wikisynset(pages:List[Page]=None, dictPageRedirect:Dict[str, List[Pag
         print("Successful reading")
     return wiki
 
-def create_info_about_sense(mode:str='read')->Dict[str, WnCtx]:
+def create_info_about_sense(mode:str='read') -> Dict[str, WnCtx]:
     '''
         Parse file with all sense in RuWordNet and create dict from synset_id in context thos synset
         param:
@@ -327,7 +326,8 @@ def create_info_about_sense(mode:str='read')->Dict[str, WnCtx]:
             for ctx_elem in ctx_s:
                 ctx.add(" ".join([get_normal_form(word) for word in ctx_elem.split()]))
             dictWn[text_id] = WnCtx(text_id, ctx, lemma, text)
-        print('finish extract data ')
+        print(f'Count sene = {countWn}')
+        print('Finish extract data ')
         print("Start writing in file")
         write_pkl(dictWn, path=PATH_TO_TMP_FILE+'ctxS.pkl')
         print("Successful recording")

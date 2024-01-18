@@ -3,7 +3,8 @@ from config.const import RUWORDNET_PATH
 import pymorphy2
 from functools import lru_cache
 from ruwordnet import RuWordNet
-from typing import Any, List
+from typing import Any, List, Union, Dict
+from .classes import WnCtx
 import pickle
 
 @lru_cache(maxsize=200000)
@@ -64,14 +65,20 @@ def includeTitleInWn(all_senses:set[str], title:str)->bool:
     text = my_split(title).split(",")
     lemmatized = " ".join([get_normal_form(word)
                 for word in text[0].split()])
-    print(text[0].split(), text, title)
     if lemmatized.upper() in all_senses:
         return True
     if "ё" in title:
         return includeTitleInWn(all_senses, title.replace("ё","е"))
     return False
 
-def get_sense_id_by_title(key):
+def get_sense_id_by_title(key:str) -> Union[None, str]:
+    '''
+        We get a string as input and search for the session id in RuWordNet for it
+        param
+            key: input string
+        return
+            None if you haven't found the key otherwise the key
+    '''
     ch = " "
     senses = wn.get_senses(key)
     if len(senses) > 0:
@@ -95,6 +102,30 @@ def get_sense_id_by_title(key):
         return get_sense_id_by_title(key.replace("ё", "e"))
     return None
 
+
+def get_lemma_by_id_sense(id:str, dictWn:Dict[str, WnCtx]) -> Union[None, str]:
+    '''
+        Getting an ID sense lemma from a RuWordNet
+        param
+            id: sense id - format '000-N-000'
+            dictWn: castom dict from id to info about sense
+    '''
+    return dictWn[id].lemmaInWn if id in dictWn else None
+
+
+def get_lemma_by_title(title:str, dictWn:Dict[str, WnCtx]) -> Union[None, str]:
+    '''
+        Getting an word  lemma from a RuWordNet
+        param
+            title: some title
+            dictWn: castom dict from id to info about sense
+    '''
+    id = get_sense_id_by_title(title)
+    if id:
+        return get_lemma_by_id_sense(id, dictWn)
+    return None
+
+
 def read_pkl(path:str) -> Any:
     '''
         Read .pkl  file and returns what is in it
@@ -107,6 +138,7 @@ def read_pkl(path:str) -> Any:
     file.close()
     return varibles
 
+
 def write_pkl(varibles:Any, path:str)->None:
     '''
         Write varibles  a .pkl file along the path
@@ -117,6 +149,7 @@ def write_pkl(varibles:Any, path:str)->None:
     file = open(path, "wb")
     pickle.dump(varibles, file=file)
     file.close()
+
 
 def extractCtxW(links:List[str], categories:List[str])->set[str]:
     '''
