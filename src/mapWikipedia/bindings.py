@@ -14,8 +14,19 @@ from typing import List, Tuple, Dict
 
 
 def unambiguous_bindings(wn:RuWordNet, dictWn:Dict[str, WnCtx], wiki:List[WikiSynset], mode:str='read') -> Tuple[Dict[str, Mapping], List[WikiSynset]]:
-    dictDisplay = {} # словарь отображений
-    new_wiki = [] #будут все викисинсеты, кроме однозначных
+    '''
+        The first stage is where we link to multi-valued Wikipedia pages 
+        with unambiguous concepts in RuWordNet
+        param:
+            wn: RuWordNet 
+            dictWn: dict from id ('101-N-100') to info about sense
+            wiki: WikiSynset list
+            mode: read or overwrite
+        return:
+            A linking dictionary and a new list without related concepts
+    '''
+    dictDisplay = {}
+    new_wiki = []
     if mode!='read':
         print('Unambiguous bindings starts')
         for wikisyn in tqdm(wiki):
@@ -47,7 +58,7 @@ def unambiguous_bindings(wn:RuWordNet, dictWn:Dict[str, WnCtx], wiki:List[WikiSy
     return dictDisplay, new_wiki
 
 
-def create_candidates_index_dict(wiki:List[WikiSynset], dictWn:Dict[str, WnCtx], mode:str='read') -> Dict[str, int]:
+def create_candidates_index_dict(wiki:List[WikiSynset]=None, dictWn:Dict[str, WnCtx]=None, mode:str='read') -> Dict[str, int]:
     '''
         Create dict_candidates in format Lemma -> idx in List[WikiSynset]
         param:
@@ -82,4 +93,73 @@ def create_candidates_index_dict(wiki:List[WikiSynset], dictWn:Dict[str, WnCtx],
     return dictLemmaInIndex
 
 
+def add_multi_flag(wiki_pages:List[WikiSynset], dictLemmaInIndex:Dict[str, int]):
+    '''
+        Inplace is a method that sets additional ambiguity flags based on the list of candidates
+        param:
+            wiki_pages: The list of candidates to whom the flag will be added
+            dictLemmaInIndex: dict_candidates in format Lemma -> idx in List[WikiSynset]
+    '''
+    print('Starts add flag')
+    dictTitleInIndex = {}
+    for index in tqdm(range(len(wiki_pages))):
+        dictTitleInIndex[wiki_pages[index].page.title] = index
+    add_counter = 0
+    for _, lst_idx in dictLemmaInIndex.items():
+        for idx in lst_idx:
+            if not wiki_pages[idx].page.multiPage:
+                if len(lst_idx)>1:
+                    wiki_pages[dictTitleInIndex[wiki_pages[idx].page.title]].page.multiPage = True
+                    add_counter +=1
+    print(f'was added {add_counter} flag')
+
+
+def second_stage_bindings(wn:RuWordNet=None, dictWn:Dict[str, WnCtx]=None, wiki:List[WikiSynset]=None,  
+                          dictDisplay:Dict[str, Mapping]=None, mode:str='read') -> Tuple[Dict[str, Mapping], List[WikiSynset]]:
+    '''
+        The second stage of linking, where we link if the redirect is
+        unambiguous and the concept corresponding to it in the RuWordNet is unambiguous
+        param:
+            wn: RuWordNet 
+            dictWn: dict from id ('101-N-100') to info about sense
+            wiki: WikiSynset list
+            dictDisplay: answer dict after firse stage
+            mode: read or overwrite
+        return:
+            Updated Dictdisplay and a new wiki list without pages that were linked
+    '''
+    wiki_for_multi = []
+    if mode != 'read':
+        countN = 0
+        print("Start second stage bindings")
+        for w in tqdm(wiki):
+            flag = False
+            if not w.page.meaningPage and not w.page.multiPage:
+                for d in w.synset:
+                    lemma = get_lemma_by_title(d.title, dictWn)
+                    if lemma:
+                        synset = wn.get_synsets(lemma)
+                        if len(synset) == 1 and "N" in synset[0].id:
+                            if w.page.title == "Abbath":
+                                print(d.title)
+                            flag = True
+                            countN += 1
+                            idd = synset[0].id
+                            p = Mapping(w.page.id,w.page.revid,w.page.title, lemma, idd,
+                                        extractCtxW(w.page.links, w.page.categories), w.page.first_sentence)
+                            dictDisplay[w.page.title]=p
+                            break
+            if not flag:
+                wiki_for_multi.append(w)
+        print(f"There were {countN} entities connected")
+        print("Start writing in file")
+        write_pkl(dictDisplay, PATH_TO_TMP_FILE+'snd_dict.pkl')
+        write_pkl(wiki_for_multi, PATH_TO_TMP_FILE+'wiki_after_snd_stage.pkl')
+        print("Successful recording")
+    else:
+        print("Start reading from file")
+        dictDisplay = read_pkl(path=PATH_TO_TMP_FILE+'snd_dict.pkl')
+        wiki_for_multi = read_pkl(path=PATH_TO_TMP_FILE+'wiki_after_snd_stage.pkl')
+        print("Successful reading")
+    return dictDisplay, wiki_for_multi
     
