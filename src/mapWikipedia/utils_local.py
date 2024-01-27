@@ -120,7 +120,8 @@ def get_lemma_by_title(title:str, dictWn:Dict[str, WnCtx]) -> Union[None, str]:
             title: some title
             dictWn: castom dict from id to info about sense
     '''
-    id = get_sense_id_by_title(title)
+    title_with_s = clear_title(title)
+    id = get_sense_id_by_title(title_with_s)
     if id:
         return get_lemma_by_id_sense(id, dictWn)
     return None

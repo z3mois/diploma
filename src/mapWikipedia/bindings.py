@@ -8,12 +8,13 @@ from  .utils_local import (
     get_sense_id_by_title,
     get_lemma_by_title
 )
+from collections import defaultdict
 from ruwordnet import RuWordNet
 from config.const import PATH_TO_TMP_FILE
 from typing import List, Tuple, Dict
 
 
-def unambiguous_bindings(wn:RuWordNet, dictWn:Dict[str, WnCtx], wiki:List[WikiSynset], mode:str='read') -> Tuple[Dict[str, Mapping], List[WikiSynset]]:
+def unambiguous_bindings(wn:RuWordNet=None, dictWn:Dict[str, WnCtx]=None, wiki:List[WikiSynset]=None, mode:str='read') -> Tuple[Dict[str, Mapping], List[WikiSynset]]:
     '''
         The first stage is where we link to multi-valued Wikipedia pages 
         with unambiguous concepts in RuWordNet
@@ -58,12 +59,14 @@ def unambiguous_bindings(wn:RuWordNet, dictWn:Dict[str, WnCtx], wiki:List[WikiSy
     return dictDisplay, new_wiki
 
 
-def create_candidates_index_dict(wiki:List[WikiSynset]=None, dictWn:Dict[str, WnCtx]=None, mode:str='read') -> Dict[str, int]:
+def create_candidates_index_dict(wiki:List[WikiSynset]=None, dictWn:Dict[str, WnCtx]=None, 
+                                 name:str='lst_candidates_after_fst_stage.pkl', mode:str='read') -> Dict[str, List[int]]:
     '''
         Create dict_candidates in format Lemma -> idx in List[WikiSynset]
         param:
             wiki: List candidates
             dictWn: dictWn: castom dict from id to info about sense
+            name: the name of the file to save
             mode: read or overwrite
     '''
     if mode != 'read':
@@ -84,14 +87,60 @@ def create_candidates_index_dict(wiki:List[WikiSynset]=None, dictWn:Dict[str, Wn
                         dictLemmaInIndex[lemma_redirect].append(index)
         print('Dict candidates creatted')
         print("Start writing in file")
-        write_pkl(dictLemmaInIndex, PATH_TO_TMP_FILE+'lst_candidates_after_fst_stage.pkl')
+        write_pkl(dictLemmaInIndex, PATH_TO_TMP_FILE+name)
         print("Successful recording")
     else:
         print("Start reading from file")
-        dictLemmaInIndex = read_pkl(path=PATH_TO_TMP_FILE+'lst_candidates_after_fst_stage.pkl')
+        dictLemmaInIndex = read_pkl(path=PATH_TO_TMP_FILE+name)
         print("Successful reading")
     return dictLemmaInIndex
 
+
+def create_candidates_for_multi_stage(wiki:List[WikiSynset]=None, wn:RuWordNet=None, dictWn:Dict[str, WnCtx]=None,
+                                      dictLemmaInIndex:Dict[str, int]=None, mode:str='read') -> Dict[str, List[WikiSynset]]:
+
+    '''
+        Creating a candidate list for a specific synset to solve the ambiguity problem
+        param:
+            wiki: List candidates
+            dictWn: dictWn: castom dict from id to info about sense
+            wn: RuWordNet 
+            dictLemmaInIndex: dict_candidates in format Lemma -> idx in List[WikiSynset]
+            mode: read or overwrite
+        return:
+            dict_candidates in format synset.id(121-N) -> List[WikiSynset]
+    '''
+    dictSynsetId = defaultdict(list)
+    print(mode, mode!='read')
+    if mode != 'read':
+        countLinksAdd = 0
+        print('Start create candidates')
+        for index in tqdm(range(len(wiki))):
+            w = wiki[index]
+            if not w.page.meaningPage:
+                lemma = get_lemma_by_title(w.page.title, dictWn)
+                if lemma:
+                    for synset in wn.get_synsets(lemma):
+                        dictSynsetId[synset.id].append(w)
+            else:
+                lemmaTitle = get_lemma_by_title(w.page.title, dictWn)
+                for link in w.page.links:
+                    lemma = get_lemma_by_title(link, dictWn)
+                    if lemma and lemma in dictLemmaInIndex:
+                        if lemmaTitle and get_sense_id_by_title(lemmaTitle) in dictWn:
+                            for synset in wn.get_synsets(lemmaTitle):
+                                countLinksAdd += 1
+                                for indexElem in dictLemmaInIndex[lemma]:
+                                    dictSynsetId[synset.id].append(wiki[indexElem]) 
+        print(f'Was added from links {countLinksAdd}')
+        print(f"Start writing in file = {PATH_TO_TMP_FILE+'candidates_for_multi_stage.pkl'}")
+        write_pkl(dictSynsetId, PATH_TO_TMP_FILE+'candidates_for_multi_stage.pkl')
+        print("Successful recording")
+    else:
+        print(f"Start reading from file = {PATH_TO_TMP_FILE+'candidates_for_multi_stage.pkl'}")
+        dictSynsetId = read_pkl(path=PATH_TO_TMP_FILE+'candidates_for_multi_stage.pkl')
+        print("Successful reading")
+    return dictSynsetId
 
 def add_multi_flag(wiki_pages:List[WikiSynset], dictLemmaInIndex:Dict[str, int]):
     '''
