@@ -6,7 +6,10 @@ from  .utils_local import (
     write_pkl,
     extractCtxW,
     get_sense_id_by_title,
-    get_lemma_by_title
+    get_lemma_by_title,
+    count1,
+    sort_dict_by_key,
+    score
 )
 from collections import defaultdict
 from ruwordnet import RuWordNet
@@ -111,7 +114,6 @@ def create_candidates_for_multi_stage(wiki:List[WikiSynset]=None, wn:RuWordNet=N
             dict_candidates in format synset.id(121-N) -> List[WikiSynset]
     '''
     dictSynsetId = defaultdict(list)
-    print(mode, mode!='read')
     if mode != 'read':
         countLinksAdd = 0
         print('Start create candidates')
@@ -211,4 +213,100 @@ def second_stage_bindings(wn:RuWordNet=None, dictWn:Dict[str, WnCtx]=None, wiki:
         wiki_for_multi = read_pkl(path=PATH_TO_TMP_FILE+'wiki_after_snd_stage.pkl')
         print("Successful reading")
     return dictDisplay, wiki_for_multi
-    
+
+
+def delete_double_in_candidates(dictSynsetId: Dict[str, List[WikiSynset]]) ->  Dict[str, List[WikiSynset]]:
+    '''
+        delete doubles in candidtes (by id page)
+        param:
+            dictSynsetId in format synset.id(121-N) -> List[WikiSynset]
+        return:
+            update dictSynsetId, without doubles
+    '''
+    doubles:int = 0
+    print('Strt deleted doubles')
+    for key in tqdm(dictSynsetId):
+        tempList = []
+        for elem in dictSynsetId[key]:
+            if not elem.page.meaningPage:
+                if count1(elem, tempList) < 1:
+                    tempList.append(elem)
+                else:
+                    doubles += 1
+        dictSynsetId[key] = tempList
+    print(f'Was deleted {doubles} doubles')
+    return dictSynsetId
+
+
+def multi_bindings_stage(dictDisplay:Dict[str, Mapping], dictSynsetId: Dict[str, List[WikiSynset]], wn:RuWordNet, dictWn:Dict[str, WnCtx], mode:str='read'):
+    badlemma, baddenominator, badmaxP, badsynsetlemma, badidWn = [], [], [], [], []
+    print(len(dictDisplay), len(dictSynsetId))
+    dictSortCandidates = {}
+    sortCandidates = sort_dict_by_key(dictSynsetId)
+    dictIdTitle = {}
+    if mode != 'read':
+        for synset in wn.synsets:
+            dictIdTitle[synset.id] = synset.title
+        for key in tqdm(sortCandidates):
+            if len(sortCandidates[key]) == 1:
+                    w = sortCandidates[key][0]
+                    p = Mapping(w.page.id,w.page.revid,w.page.title, dictIdTitle[key], key,extractCtxW(w.page.links, w.page.categories), w.page.first_sentence)
+                    dictDisplay[w.page.title]=p
+                    dictSortCandidates[key] = [(sortCandidates[key][0], 1)]
+            else:
+                maxP = -1
+                maxagrument = 0
+                lemmaSynset = get_lemma_by_title(dictIdTitle[key], dictWn)
+                dictSortCandidates[key] = []
+                if lemmaSynset:
+                    idWn = wn.get_senses(lemmaSynset)[0].id
+                    if "N" in idWn: #sometimes synet of sence N is not N
+                        for elem in sortCandidates[key]:
+                            ctxw = extractCtxW(elem.page.links, elem.page.categories)
+                            lemma =  get_lemma_by_title(elem.page.title, dictWn)
+                            if lemma:
+                                numerator = score(dictWn[idWn].ctx, ctxw)
+                                denominator = 0
+                                for item in sortCandidates[key]:
+                                    addctxw = extractCtxW(item.page.links, item.page.categories)
+                                    denominator +=score(dictWn[idWn].ctx, addctxw)
+                            else:
+                                badlemma.append(elem.page.title)
+                            if denominator != 0:
+                                dictSortCandidates[key].append((elem, numerator / denominator))
+                                if numerator / denominator > maxP:
+                                    maxP = numerator / denominator
+                                    maxagrument = elem
+                            else:
+                                baddenominator.append(elem.page.title)
+                                dictSortCandidates[key].append((elem, -1))
+                    else:
+                        badidWn.append(wn.get_senses(lemmaSynset)[0].id)
+                else:
+                    badsynsetlemma.append(dictIdTitle[key])
+                if maxP != - 1:
+                    w = maxagrument
+                    p = Mapping(w.page.id,w.page.revid,w.page.title,dictIdTitle[key], key,
+                                extractCtxW(w.page.links, w.page.categories), w.page.first_sentence)
+                    dictDisplay[w.page.title] = p
+                else:
+                    badmaxP.append(key)
+        print(dictDisplay)
+        print("len(dictDisplay)", len(dictDisplay)) 
+        print("len(badlemma)", len(badlemma))
+        print("len(baddenominator)", len(baddenominator))
+        print("len(badmaxP)", len(badmaxP))
+        print("len(badsynsetlemma)", len(badsynsetlemma))
+        print("len(badidWn)", len(badidWn))
+
+        print("Start writing in file")
+        write_pkl(dictDisplay, PATH_TO_TMP_FILE+'thr_dict.pkl')
+        write_pkl(dictSortCandidates, PATH_TO_TMP_FILE+'dictSortCandidates_thr_stage.pkl')
+        print("Successful recording")
+    else:
+        print("Start reading from file")
+        dictDisplay = read_pkl(path=PATH_TO_TMP_FILE+'thr_dict.pkl')
+        dictSortCandidates = read_pkl(path=PATH_TO_TMP_FILE+'dictSortCandidates_thr_stage.pkl')
+        print("Successful reading")        
+    return dictDisplay, dictSortCandidates
+

@@ -4,8 +4,9 @@ import pymorphy2
 from functools import lru_cache
 from ruwordnet import RuWordNet
 from typing import Any, List, Union, Dict
-from .classes import WnCtx
+from .classes import WnCtx, WikiSynset
 import pickle
+
 
 @lru_cache(maxsize=200000)
 def get_normal_form(word:str)-> str:
@@ -165,3 +166,32 @@ def extractCtxW(links:List[str], categories:List[str])->set[str]:
     for elem in categories:
         ctx.add(" ".join([get_normal_form(word) for word in elem.split()]))
     return ctx
+
+
+
+def count1(value:WikiSynset, array:List[WikiSynset]) -> int:
+    '''
+        Count elem in array(count by id page)
+    '''
+    count:int = 0
+    for elem in array:
+        if elem.page.id == value.page.id:
+            count += 1
+    return count
+
+
+def score(ctxS:set, ctxW:set) -> int:
+    '''
+        find len of intersection two set
+        param:
+            set1, set2
+        return:
+            len of intersection
+    '''
+    return len(ctxS.intersection(ctxW))
+
+def sort_dict_by_key(dct:Dict[Any, Any]) -> Dict[Any, Any]:
+    '''
+        sort dict by dict key
+    '''
+    return dict(sorted(dct.items(), key=lambda x: x[0]))

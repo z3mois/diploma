@@ -5,7 +5,9 @@ from src.mapWikipedia import (
       wn, unambiguous_bindings, 
       create_candidates_index_dict, 
       add_multi_flag, second_stage_bindings,
-      create_candidates_for_multi_stage)
+      create_candidates_for_multi_stage, 
+      delete_double_in_candidates,
+      multi_bindings_stage)
 from config.const import DAMP_OF_WIKIPEDIA_PATH
 
 dictWn = create_info_about_sense()
@@ -22,4 +24,8 @@ dictt, new_wiki = second_stage_bindings()
 dictLemmNew = create_candidates_index_dict(name='lst_candidates_after_snd_stage.pkl', mode='read')
 
 
-print(create_candidates_for_multi_stage(new_wiki, wn, dictWn, dictLemmNew, mode='read')['124964-N'][0])
+dict_candidtes = create_candidates_for_multi_stage(new_wiki, wn, dictWn, dictLemmNew, mode='read')
+
+dict_candidtes_update = delete_double_in_candidates(dict_candidtes)
+
+dicttFinal = multi_bindings_stage(dictt, dict_candidtes_update, wn, dictWn, mode='over')
