@@ -4,15 +4,18 @@ from os import listdir
 from os.path import isfile, join
 import json
 import numpy as np
+from tqdm import tqdm
 
-
-def main():
-    data = pd.read_csv(GOLD_DATA)
+def create_dataset_for_wikidata(path_to_wikipedia_dataset:str=GOLD_DATA, path_to_wikidata_dataset:str=GOLD_WIKIDATA_DATASET) -> None:
+    '''
+        Creating a dataset to evaluate linking Wikidata to RuWrodNet based on the dataset for Wikipedia
+    '''
+    data = pd.read_csv(path_to_wikipedia_dataset)
     data_wiki_title = set([elem.lower() for elem in data['wiki_title_gold'].values])
     onlyfiles = [f for f in listdir(DAMP_OF_WIKIDATA_PATH) if isfile(join(DAMP_OF_WIKIDATA_PATH, f))]
 
     dict_wiki_to_wikidata = {}
-    for file in onlyfiles:
+    for file in tqdm(onlyfiles):
         with open(f'{DAMP_OF_WIKIDATA_PATH}\\{file}', 'r', encoding='utf-8') as f:
             for line in f:
                 info = json.loads(line)
@@ -26,7 +29,4 @@ def main():
                             dict_wiki_to_wikidata[info['sitelinks']['ruwiki']] = (info['label'], info['id'])
     data['WikiDataGoldTitle'] = data['wiki_title_gold'].apply(lambda x: dict_wiki_to_wikidata[x][0]['ru'] if x in dict_wiki_to_wikidata else np.nan)
     data['WikiDataGoldId'] = data['wiki_title_gold'].apply(lambda x: dict_wiki_to_wikidata[x][1] if x in dict_wiki_to_wikidata else np.nan)
-    data.to_csv(GOLD_WIKIDATA_DATASET)
-
-if __name__ == "__main__":
-    main()
+    data.to_csv(path_to_wikidata_dataset, index=False)
