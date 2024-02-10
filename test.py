@@ -7,7 +7,8 @@ from src.mapWikipedia import (
       add_multi_flag, second_stage_bindings,
       create_candidates_for_multi_stage, 
       delete_double_in_candidates,
-      multi_bindings_stage)
+      multi_bindings_stage,
+      multi_bindings_stage_labse)
 from config.const import DAMP_OF_WIKIPEDIA_PATH
 
 dictWn = create_info_about_sense()
@@ -28,4 +29,4 @@ dict_candidtes = create_candidates_for_multi_stage(new_wiki, wn, dictWn, dictLem
 
 dict_candidtes_update = delete_double_in_candidates(dict_candidtes)
 
-dicttFinal = multi_bindings_stage(dictt, dict_candidtes_update, wn, dictWn, mode='over')
+dicttFinal = multi_bindings_stage(dictt, dict_candidtes_update, wn, dictWn, type_bindings='labse', mode='over')

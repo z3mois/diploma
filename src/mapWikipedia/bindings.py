@@ -9,8 +9,9 @@ from  .utils_local import (
     get_lemma_by_title,
     count1,
     sort_dict_by_key,
-    score
+    score, 
 )
+from .model import SentenceBertTransformer
 from collections import defaultdict
 from ruwordnet import RuWordNet
 from config.const import PATH_TO_TMP_FILE
@@ -238,19 +239,33 @@ def delete_double_in_candidates(dictSynsetId: Dict[str, List[WikiSynset]]) ->  D
     return dictSynsetId
 
 
-def multi_bindings_stage(dictDisplay:Dict[str, Mapping], dictSynsetId: Dict[str, List[WikiSynset]], wn:RuWordNet, dictWn:Dict[str, WnCtx], mode:str='read'):
-    badlemma, baddenominator, badmaxP, badsynsetlemma, badidWn = [], [], [], [], []
-    print(len(dictDisplay), len(dictSynsetId))
-    dictSortCandidates = {}
-    sortCandidates = sort_dict_by_key(dictSynsetId)
-    dictIdTitle = {}
+def multi_bindings_stage(dictDisplay:Dict[str, Mapping]=None, dictSynsetId: Dict[str, List[WikiSynset]]=None, 
+                         wn:RuWordNet=None, dictWn:Dict[str, WnCtx]=None, type_bindings:str='base', mode:str='read'):
+    '''
+        The stage of linking to a specific synset of a certain Wikipedia article
+        param:
+            dictDisplay:    answer dict after second stage
+            dictSynsetId: dictSynsetId in format synset.id(121-N) -> List[WikiSynset]
+            wn: RuWordNet 
+            dictWn: dict from id ('101-N-100') to info about sense  
+            type_bindings: base(method from Archiv), labse(check only cosine similarity)
+            mode: read or overwrite
+        return:
+           Answer dict after multi stage
+    '''
     if mode != 'read':
+        dictSortCandidates = {}
+        badlemma, baddenominator, badmaxP, badsynsetlemma, badidWn = [], [], [], [], []
+        sortCandidates = sort_dict_by_key(dictSynsetId)
+        dictIdTitle = {}
+        labse = SentenceBertTransformer(device="cuda")
+        labse.load_model()
         for synset in wn.synsets:
             dictIdTitle[synset.id] = synset.title
         for key in tqdm(sortCandidates):
             if len(sortCandidates[key]) == 1:
                     w = sortCandidates[key][0]
-                    p = Mapping(w.page.id,w.page.revid,w.page.title, dictIdTitle[key], key,extractCtxW(w.page.links, w.page.categories), w.page.first_sentence)
+                    p = Mapping(w.page.id,w.page.revid,w.page.title, dictIdTitle[key], key, extractCtxW(w.page.links, w.page.categories), w.page.first_sentence)
                     dictDisplay[w.page.title]=p
                     dictSortCandidates[key] = [(sortCandidates[key][0], 1)]
             else:
@@ -262,24 +277,31 @@ def multi_bindings_stage(dictDisplay:Dict[str, Mapping], dictSynsetId: Dict[str,
                     idWn = wn.get_senses(lemmaSynset)[0].id
                     if "N" in idWn: #sometimes synet of sence N is not N
                         for elem in sortCandidates[key]:
-                            ctxw = extractCtxW(elem.page.links, elem.page.categories)
-                            lemma =  get_lemma_by_title(elem.page.title, dictWn)
-                            if lemma:
-                                numerator = score(dictWn[idWn].ctx, ctxw)
+                            if type_bindings == 'base':
+                                ctxw = extractCtxW(elem.page.links, elem.page.categories)
+                                lemma =  get_lemma_by_title(elem.page.title, dictWn)
                                 denominator = 0
-                                for item in sortCandidates[key]:
-                                    addctxw = extractCtxW(item.page.links, item.page.categories)
-                                    denominator +=score(dictWn[idWn].ctx, addctxw)
-                            else:
-                                badlemma.append(elem.page.title)
-                            if denominator != 0:
-                                dictSortCandidates[key].append((elem, numerator / denominator))
-                                if numerator / denominator > maxP:
-                                    maxP = numerator / denominator
+                                if lemma:
+                                    numerator = score(dictWn[idWn].ctx, ctxw)
+                                    for item in sortCandidates[key]:
+                                        addctxw = extractCtxW(item.page.links, item.page.categories)
+                                        denominator +=score(dictWn[idWn].ctx, addctxw)
+                                else:
+                                    badlemma.append(elem.page.title)
+                                if denominator != 0:
+                                    dictSortCandidates[key].append((elem, numerator / denominator))
+                                    if numerator / denominator > maxP:
+                                        maxP = numerator / denominator
+                                        maxagrument = elem
+                                else:
+                                    baddenominator.append(elem.page.title)
+                                    dictSortCandidates[key].append((elem, -1))
+                            elif type_bindings == 'labse':
+                                cosine_score = labse.cosine_similarity(f'{elem.page.title} - это тоже, что и {lemmaSynset}', elem.page.title + '[SEP]' + elem.page.first_sentence)
+                                dictSortCandidates[key].append((elem, cosine_score))
+                                if cosine_score > maxP:
+                                    maxP = cosine_score
                                     maxagrument = elem
-                            else:
-                                baddenominator.append(elem.page.title)
-                                dictSortCandidates[key].append((elem, -1))
                     else:
                         badidWn.append(wn.get_senses(lemmaSynset)[0].id)
                 else:
@@ -300,13 +322,71 @@ def multi_bindings_stage(dictDisplay:Dict[str, Mapping], dictSynsetId: Dict[str,
         print("len(badidWn)", len(badidWn))
 
         print("Start writing in file")
-        write_pkl(dictDisplay, PATH_TO_TMP_FILE+'thr_dict.pkl')
-        write_pkl(dictSortCandidates, PATH_TO_TMP_FILE+'dictSortCandidates_thr_stage.pkl')
+        write_pkl(dictDisplay, PATH_TO_TMP_FILE+f'thr_dict_{type_bindings}.pkl')
+        write_pkl(dictSortCandidates, PATH_TO_TMP_FILE+f'dictSortCandidates_thr_stage_{type_bindings}.pkl')
         print("Successful recording")
     else:
         print("Start reading from file")
-        dictDisplay = read_pkl(path=PATH_TO_TMP_FILE+'thr_dict.pkl')
-        dictSortCandidates = read_pkl(path=PATH_TO_TMP_FILE+'dictSortCandidates_thr_stage.pkl')
+        dictDisplay = read_pkl(path=PATH_TO_TMP_FILE+f'thr_dict_{type_bindings}.pkl')
+        dictSortCandidates = read_pkl(path=PATH_TO_TMP_FILE+f'dictSortCandidates_thr_stage_{type_bindings}.pkl')
         print("Successful reading")        
     return dictDisplay, dictSortCandidates
 
+
+def multi_bindings_stage_labse(dictDisplay:Dict[str, Mapping], dictSynsetId: Dict[str, List[WikiSynset]], wn:RuWordNet, dictWn:Dict[str, WnCtx], mode:str='read'):
+    badlemma, badmaxP, badsynsetlemma, badidWn = [], [], [], []
+    print(len(dictDisplay), len(dictSynsetId))
+    dictSortCandidates = {}
+    sortCandidates = sort_dict_by_key(dictSynsetId)
+    dictSortCandidates = {}
+    dictIdTitle = {}
+    labse = SentenceBertTransformer(device="cuda")
+    labse.load_model()
+    i = 0
+    for synset in wn.synsets:
+        dictIdTitle[synset.id] = synset.title
+    for key in tqdm(sortCandidates):
+        if len(sortCandidates[key]) == 1:
+                w = sortCandidates[key][0]
+                p = Mapping(w.page.id,w.page.revid,w.page.title, dictIdTitle[key], key,extractCtxW(w.page.links, w.page.categories), w.page.first_sentence)
+                dictDisplay[w.page.title]=p
+                dictSortCandidates[key] = [(sortCandidates[key][0], 1)]
+        else:
+            maxP = -1
+            maxagrument = 0
+            lemmaSynset = get_lemma_by_title(dictIdTitle[key], dictWn)
+            dictSortCandidates[key] = []
+            if lemmaSynset:
+                idWn = wn.get_senses(lemmaSynset)[0].id
+                if "N" in idWn: #sometimes synet of sence N is not N
+                    for elem in sortCandidates[key]:
+                        i +=1
+                        cosine_score = labse.cosine_similarity(f'{elem.page.title} - это тоже, что и {lemmaSynset}', elem.page.title + '[SEP]' + elem.page.first_sentence)
+                        # print(elem.page.title + '[SEP]' +elem.page.first_sentence, f'{elem.page.title} - это тоже, что и {lemmaSynset}', cosine_score, sep='::::')
+                        dictSortCandidates[key].append((elem, cosine_score))
+                        if cosine_score > maxP:
+                            maxP = cosine_score
+                            maxagrument = elem
+                else:
+                    badidWn.append(wn.get_senses(lemmaSynset)[0].id)
+            else:
+                badsynsetlemma.append(dictIdTitle[key])
+            if maxP != - 1:
+                w = maxagrument
+                p = Mapping(w.page.id,w.page.revid,w.page.title,dictIdTitle[key], key,
+                            extractCtxW(w.page.links, w.page.categories), w.page.first_sentence)
+                dictDisplay[w.page.title] = p
+            else:
+                badmaxP.append(key)
+        # if i > 10:
+        #     return
+    print("len(dictDisplay)",len(dictDisplay)) 
+    print("len(badlemma)",len(badlemma))
+    print("len(badmaxP)",len(badmaxP))
+    print("len(badsynsetlemma)",len(badsynsetlemma))
+    print("len(badidWn)",len(badidWn))
+
+    print("Start writing in file")
+    write_pkl(dictDisplay, PATH_TO_TMP_FILE+'thr_dict_labse.pkl')
+    write_pkl(dictSortCandidates, PATH_TO_TMP_FILE+'dictSortCandidates_thr_stage_labse.pkl')
+    print("Successful recording")
