@@ -10,9 +10,10 @@ from src.mapWikipedia import (
       multi_bindings_stage,
 )
 from src.mapWikidata import (
-    create_dataset_for_wikidata
+
+    create_dataset_for_wikidata,extract_title_with_title_in_RuWordNet, extract_referring_pages
 )
-from config.const import DAMP_OF_WIKIPEDIA_PATH
+from config.const import DAMP_OF_WIKIPEDIA_PATH, DAMP_OF_WIKIDATA_PATH
 
 # dictWn = create_info_about_sense()
 # # wiki = create_wikisynset()
@@ -34,4 +35,10 @@ from config.const import DAMP_OF_WIKIPEDIA_PATH
 
 # dicttFinal = multi_bindings_stage(dictt, dict_candidtes_update, wn, dictWn, type_bindings='labse', mode='read')
 
-create_dataset_for_wikidata()
+# create_dataset_for_wikidata()
+
+to_add, articles = extract_title_with_title_in_RuWordNet(mode='read')
+
+
+extract_referring_pages(DAMP_OF_WIKIDATA_PATH, to_add, articles, depth=10, mode='overwrite')
+

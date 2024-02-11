@@ -6,6 +6,7 @@ import json
 import numpy as np
 from tqdm import tqdm
 
+
 def create_dataset_for_wikidata(path_to_wikipedia_dataset:str=GOLD_DATA, path_to_wikidata_dataset:str=GOLD_WIKIDATA_DATASET) -> None:
     '''
         Creating a dataset to evaluate linking Wikidata to RuWrodNet based on the dataset for Wikipedia
