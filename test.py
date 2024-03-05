@@ -33,7 +33,7 @@ dict_candidtes = create_candidates_for_multi_stage(new_wiki, wn, dictWn, dictLem
 
 dict_candidtes_update = delete_double_in_candidates(dict_candidtes)
 
-dicttFinal = multi_bindings_stage(dictt, dict_candidtes_update, wn, dictWn, type_bindings='labse', model_name='intfloat/multilingual-e5-large', mode='overwrite')
+dicttFinal = multi_bindings_stage(dictt, dict_candidtes_update, wn, dictWn, type_bindings='fasttext', model_name='intfloat/multilingual-e5-large', mode='overwrite')
 
 # create_dataset_for_wikidata()
 

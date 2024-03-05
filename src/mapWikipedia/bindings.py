@@ -19,7 +19,7 @@ from ruwordnet import RuWordNet
 from config.const import PATH_TO_TMP_FILE, PATH_TO_FASTTEXT
 from typing import List, Tuple, Dict
 import fasttext
-
+import numpy as np
 
 def unambiguous_bindings(wn:RuWordNet=None, dictWn:Dict[str, WnCtx]=None, wiki:List[WikiSynset]=None, mode:str='read') -> Tuple[Dict[str, Mapping], List[WikiSynset]]:
     '''
@@ -331,9 +331,22 @@ def multi_bindings_stage(dictDisplay:Dict[str, Mapping]=None, dictSynsetId: Dict
                                     print(f'{elem.page.title}: {cosine_score}', first, sentence_hyper,
                                            sep='\n', end='\n', file=log_bindings)
                             elif type_bindings == 'fasttext':
-                                ft
-                                pass
-
+                                embed_wiki_page = np.zeros(ft.get_dimension())
+                                ctxw = extractCtxW(elem.page.links, elem.page.categories)
+                                ctxw.add(elem.page.title)
+                                ctxw = set(map(remove_non_ascii_cyrillic, ctxw))
+                                for word in ctxw:
+                                    embed_wiki_page += ft.get_word_vector(word)
+                                average_embedding_wiki_page = embed_wiki_page / len(ctxw)
+                                wn_embedding = ft.get_word_vector(lemmaSynset)
+                                cosine_score = cosine_similarity(average_embedding_wiki_page, wn_embedding)
+                                dictSortCandidates[key].append((elem, cosine_score))
+                                if cosine_score > maxP:
+                                    maxP = cosine_score
+                                    maxagrument = elem
+                                if i < log_len:
+                                    print(f'{remove_non_ascii_cyrillic(elem.page.title)}: {cosine_score}', ctxw, lemmaSynset,
+                                            sep='\n', end='\n', file=log_bindings)
                     else:
                         badidWn.append(wn.get_senses(lemmaSynset)[0].id)
                 else:
