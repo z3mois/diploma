@@ -270,7 +270,7 @@ def multi_bindings_stage(dictDisplay:Dict[str, Mapping]=None, dictSynsetId: Dict
             labse = SentenceBertTransformer(model_name=model_name, device="cuda")
             labse.load_model()
         elif type_bindings == 'fasttext':
-            ft = fasttext.load_model('PATH_TO_FASTTEXT')
+            ft = fasttext.load_model(PATH_TO_FASTTEXT)
         for synset in wn.synsets:
             dictIdTitle[synset.id] = synset.title
         log_bindings = open(PATH_TO_TMP_FILE+f'log_bindings_{log_len}{file_prefix}.txt', 'w')
@@ -331,6 +331,7 @@ def multi_bindings_stage(dictDisplay:Dict[str, Mapping]=None, dictSynsetId: Dict
                                     print(f'{elem.page.title}: {cosine_score}', first, sentence_hyper,
                                            sep='\n', end='\n', file=log_bindings)
                             elif type_bindings == 'fasttext':
+                                ft
                                 pass
 
                     else:
