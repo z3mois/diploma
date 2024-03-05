@@ -1,7 +1,8 @@
 from emoji import UNICODE_EMOJI
+from collections import deque
 
-chars = set(["-", " ", ':', '(', ')', '.', ',', '{', '}', '?', '!', ';', '\"', "\'", '+', '='])
 
+chars = set(["-", " ", ':', '(', ')', '.', ',', '{', '}', '?', '!', ';', '\"', "\'", '+', '=', '*'])
 
 def is_lat(s:str) -> bool:
     '''

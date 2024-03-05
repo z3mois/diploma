@@ -9,23 +9,24 @@ from ..mapWikipedia import (
     write_pkl,
     read_pkl,
     create_info_about_sense,
-    wn
+    wn,
+    remove_non_ascii_cyrillic
 )
 from .utils_local import (
     is_lat
 )
 from typing import Tuple, List
+from .classes import WikidataPage
 
-
-def extract_title_with_title_in_RuWordNet(path_to_data:str=DAMP_OF_WIKIDATA_PATH, mode:str='read') -> Tuple[set[str], List[dict]]:
+def extract_title_with_title_in_RuWordNet(path_to_data:str=DAMP_OF_WIKIDATA_PATH, mode:str='read') -> Tuple[set[str], List[WikidataPage]]:
     '''
         There is a path to the files with wikidata data. Each file contains one json line with information about the page.
           The files were obtained using https://github.com/SuLab/WikidataIntegrato.
     '''
     if mode != 'read':
         dictWn = create_info_about_sense()
-        tweets = []
-        to_add = set()
+        tweets:List[WikidataPage] = []
+        to_add:set[str] = set()
         onlyfiles = [f for f in listdir(path_to_data) if isfile(join(path_to_data, f))]
         print('Start create data')
         for file in tqdm(onlyfiles):
@@ -34,26 +35,23 @@ def extract_title_with_title_in_RuWordNet(path_to_data:str=DAMP_OF_WIKIDATA_PATH
                     info = json.loads(line)
                     if info['id'] == 'Q190':
                             print(info)
-                    if 'ru' in info['label'] and int(info['id'][1:]) <= 10000000 and (is_lat(info["label"]['ru'])) and 'фильм' not in info["label"]['ru']:
-                        try:
-                            label = info["label"]['ru']
-                            sense = wn.get_senses(label)
+                    if 'ru' in info['label'] and int(info['id'][1:]) <= 10000000 and 'фильм' not in info["label"]['ru'].lower():
+                        label = remove_non_ascii_cyrillic(info["label"]['ru'])
+                        sense = wn.get_senses(label)
+                        if info['id'] == 'Q190':
+                                print(sense)        
+                        if sense:
+                            tweets.append(WikidataPage(info, sense[0].lemma))
+                            for elem in info['rels']:
+                                to_add.add(elem['rel_id'])
+                        else:
+                            lemma = get_lemma_by_title(label, dictWn)
                             if info['id'] == 'Q190':
-                                    print(sense)        
-                            if sense:
-                                tweets.append((info, sense[0].lemma))
+                                print(lemma, '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!') 
+                            if lemma:
+                                tweets.append(WikidataPage(info, lemma))
                                 for elem in info['rels']:
-                                    to_add.add(elem['rel_id'])
-                            else:
-                                lemma = get_lemma_by_title(label, dictWn)
-                                if info['id'] == 'Q190':
-                                    print(lemma, '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!') 
-                                if lemma:
-                                    tweets.append((info, lemma))
-                                    for elem in info['rels']:
-                                        to_add.add(elem['rel_id'])     
-                        except:
-                            pass
+                                    to_add.add(elem['rel_id'])     
         print(f'Was found {len(tweets)} articles and need to add {len(to_add)}')
         write_pkl(to_add, PATH_TO_TMP_FILE+'titleWn_to_add.pkl')
         write_pkl(tweets, PATH_TO_TMP_FILE+'titleWn_tweets.pkl')
@@ -63,11 +61,12 @@ def extract_title_with_title_in_RuWordNet(path_to_data:str=DAMP_OF_WIKIDATA_PATH
         to_add = read_pkl(PATH_TO_TMP_FILE+'titleWn_to_add.pkl')
         tweets = read_pkl(PATH_TO_TMP_FILE+'titleWn_tweets.pkl')
         print("Successful recording")
-    return to_add,   tweets
+    return to_add, tweets
 
 
 
-def extract_referring_pages(path_to_data:str=DAMP_OF_WIKIDATA_PATH, to_add:set[str]=None, articles:List[dict]=None, depth:int=10, mode:str='read') -> List[dict]:
+def extract_referring_pages(path_to_data:str=DAMP_OF_WIKIDATA_PATH, to_add:set[str]=None, articles:List[WikidataPage]=None,
+                             depth:int=10, mode:str='read') -> List[WikidataPage]:
     '''
         We add all the pages leading to the data, and so recursively, due to problems related to limited memory.
         We will go through all the files several times and add these pages. We have depth of passages in total.
@@ -88,21 +87,21 @@ def extract_referring_pages(path_to_data:str=DAMP_OF_WIKIDATA_PATH, to_add:set[s
             if i != 0:
                 to_add = new_to_add
             print(len(to_add))
-            new_to_add = set()
+            new_to_add:set[str] = set()
             for file in onlyfiles:
                 with open(f'{path_to_data}\\{file}', 'r', encoding='utf-8') as f:
                     for line in f:
                         info = json.loads(line)
-                        if info['id'] in to_add and int(info['id'][1:]) <= 10000000 and 'ru' in info['label']  and 'фильм' not in info["label"]['ru']:
+                        if info['id'] in to_add and int(info['id'][1:]) <= 10000000 and 'ru' in info['label']  and 'фильм' not in info["label"]['ru'].lower():
                             try:
-                                label = info["label"]['ru']
+                                label = remove_non_ascii_cyrillic(info["label"]['ru'])
                                 sense = wn.get_senses(label)
                                 if sense:
-                                    articles.append((info, sense[0].lemma))
+                                    articles.append(WikidataPage(info, sense[0].lemma))
                                 else:
                                     lemma = get_lemma_by_title(label, dictWn)
                                     if lemma is not None:
-                                        articles.append((info, lemma))
+                                        articles.append(WikidataPage(info, lemma))
                                 for elem in info['rels']:
                                     new_to_add.add(elem['rel_id'])
                             except:
@@ -110,7 +109,7 @@ def extract_referring_pages(path_to_data:str=DAMP_OF_WIKIDATA_PATH, to_add:set[s
                         elif info['label'] and info['id'] in to_add:
                             for elem in info['rels']:
                                 new_to_add.add(elem['rel_id'])
-                            articles.append((info, info['label']['en']))
+                            articles.append(WikidataPage(info, info['label']['en']))
         print(f'Was found {len(articles)} articles')
         write_pkl(articles, PATH_TO_TMP_FILE+'articles_all.pkl')
         print('Second stage reading end')
