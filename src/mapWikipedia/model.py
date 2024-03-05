@@ -22,6 +22,8 @@ class SentenceBertTransformer:
         return last_hidden.sum(dim=1) / attention_mask.sum(dim=1)[..., None]
     
     def transform(self, text):
+        if 'e5' in self.model_name:
+            text = 'query: ' + text
         inputs = self.tokenizer(
             [text], return_tensors="pt", padding=True, max_length=self.max_len, verbose=False, truncation=True
         )
@@ -53,8 +55,8 @@ class SentenceBertTransformer:
     def cosine_similarity(self, sent1:str, sent2:str) -> float:
         '''
         Calculating the cosine proximity between two sentences 
-        Param: two sentences
-        return: cosine similarity range, -1 to 1:
+            Param: two sentences
+            return: cosine similarity range, -1 to 1
         '''
         sent1_embeding = self.transform(sent1)
         sent2_embeding = self.transform(sent2)

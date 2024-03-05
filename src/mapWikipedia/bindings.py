@@ -317,9 +317,6 @@ def multi_bindings_stage(dictDisplay:Dict[str, Mapping]=None, dictSynsetId: Dict
                             elif type_bindings == 'labse':
                                 first =  remove_non_ascii_cyrillic(elem.page.title + '[SEP]' + elem.page.first_sentence)
                                 sentence_hyper = f'{elem.page.title} - это тоже, что и {lemmaSynset}'
-                                if 'e5' in model_name:
-                                   first =  'query: ' + first
-                                   sentence_hyper = 'query: ' + sentence_hyper
                                 cosine_score = labse.cosine_similarity(sentence_hyper, first)
                                 dictSortCandidates[key].append((elem, cosine_score))
                                 if cosine_score > maxP:
@@ -328,6 +325,9 @@ def multi_bindings_stage(dictDisplay:Dict[str, Mapping]=None, dictSynsetId: Dict
                                 if i < 1000:
                                     print(f'{elem.page.title}: {cosine_score}', first, sentence_hyper,
                                            sep='\n', end='\n', file=log_bindings_1000)
+                            elif type_bindings == 'fasttext':
+                                pass
+
                     else:
                         badidWn.append(wn.get_senses(lemmaSynset)[0].id)
                 else:
