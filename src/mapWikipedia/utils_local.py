@@ -7,6 +7,7 @@ from typing import Any, List, Union, Dict
 from .classes import WnCtx, WikiSynset
 import pickle
 import re
+import numpy as np
 
 
 @lru_cache(maxsize=200000)
@@ -200,3 +201,12 @@ def sort_dict_by_key(dct:Dict[Any, Any]) -> Dict[Any, Any]:
 def remove_non_ascii_cyrillic(text):
     """Удаляет из текста все символы, не являющиеся ни ASCII, ни русскими буквами."""
     return re.sub(r'[^\x00-\x7Fа-яА-ЯёЁ]+', '', text)
+
+
+def cosine_similarity(emb1: np.ndarray[np.float64], emb2: np.ndarray[np.float64]) -> float:
+    '''
+    Calculating the cosine proximity between two vord represetaion(word or sent)
+        Param: two embed
+        return: cosine similarity range, -1 to 1
+    '''    
+    return np.dot(emb1, emb2) /(np.linalg.norm(emb2) * np.linalg.norm(emb1))

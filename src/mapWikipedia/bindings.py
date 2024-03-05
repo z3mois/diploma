@@ -10,13 +10,15 @@ from  .utils_local import (
     count1,
     sort_dict_by_key,
     score,
-    remove_non_ascii_cyrillic
+    remove_non_ascii_cyrillic,
+    cosine_similarity
 )
 from .model import SentenceBertTransformer
 from collections import defaultdict
 from ruwordnet import RuWordNet
-from config.const import PATH_TO_TMP_FILE
+from config.const import PATH_TO_TMP_FILE, PATH_TO_FASTTEXT
 from typing import List, Tuple, Dict
+import fasttext
 
 
 def unambiguous_bindings(wn:RuWordNet=None, dictWn:Dict[str, WnCtx]=None, wiki:List[WikiSynset]=None, mode:str='read') -> Tuple[Dict[str, Mapping], List[WikiSynset]]:
@@ -242,7 +244,7 @@ def delete_double_in_candidates(dictSynsetId: Dict[str, List[WikiSynset]]) ->  D
 
 def multi_bindings_stage(dictDisplay:Dict[str, Mapping]=None, dictSynsetId: Dict[str, List[WikiSynset]]=None, 
                          wn:RuWordNet=None, dictWn:Dict[str, WnCtx]=None, type_bindings:str='base',
-                           model_name:str='setu4993/LaBSE', mode:str='read'):
+                           model_name:str='setu4993/LaBSE', log_len:int=1000, mode:str='read'):
     '''
         The stage of linking to a specific synset of a certain Wikipedia article
         param:
@@ -251,7 +253,8 @@ def multi_bindings_stage(dictDisplay:Dict[str, Mapping]=None, dictSynsetId: Dict
             wn: RuWordNet 
             dictWn: dict from id ('101-N-100') to info about sense  
             model_name: name model from HF to type_bindings = labse
-            type_bindings: base(method from Archiv), labse(check only cosine similarity)
+            type_bindings: base(method from Archiv), labse(check only cosine similarity), fasttext (check similarity fasttext embeddings)
+            model_name: model_name for method labse(for exmaple: setu4993/LaBSE, intfloat/multilingual-e5-large)
             mode: read or overwrite
         return:
            Answer dict after multi stage
@@ -266,19 +269,21 @@ def multi_bindings_stage(dictDisplay:Dict[str, Mapping]=None, dictSynsetId: Dict
         if type_bindings == 'labse':
             labse = SentenceBertTransformer(model_name=model_name, device="cuda")
             labse.load_model()
+        elif type_bindings == 'fasttext':
+            ft = fasttext.load_model('PATH_TO_FASTTEXT')
         for synset in wn.synsets:
             dictIdTitle[synset.id] = synset.title
-        log_bindings_1000 = open(PATH_TO_TMP_FILE+f'log_bindings_1000{file_prefix}.txt', 'w')
+        log_bindings = open(PATH_TO_TMP_FILE+f'log_bindings_{log_len}{file_prefix}.txt', 'w')
         for i, key in tqdm(enumerate(sortCandidates)):
-            if i < 1000:
-                print(key, file=log_bindings_1000)
+            if i < log_len:
+                print(key, file=log_bindings)
             if len(sortCandidates[key]) == 1:
                     w = sortCandidates[key][0]
                     p = Mapping(w.page.id,w.page.revid,w.page.title, dictIdTitle[key], key, extractCtxW(w.page.links, w.page.categories), w.page.first_sentence)
                     dictDisplay[w.page.title]=p
                     dictSortCandidates[key] = [(sortCandidates[key][0], 1)]
-                    if i < 1000:
-                        print(w.page.title,end='\n', file=log_bindings_1000)
+                    if i < log_len:
+                        print(w.page.title,end='\n', file=log_bindings)
             else:
                 maxP = -1
                 maxagrument = 0
@@ -286,7 +291,7 @@ def multi_bindings_stage(dictDisplay:Dict[str, Mapping]=None, dictSynsetId: Dict
                 dictSortCandidates[key] = []
                 if lemmaSynset:
                     idWn = wn.get_senses(lemmaSynset)[0].id
-                    if "N" in idWn: #sometimes synet of sence N is not N
+                    if "N" in idWn: #sometimes synset of sence N is not N
                         for elem in sortCandidates[key]:
                             if type_bindings == 'base':
                                 ctxw = extractCtxW(elem.page.links, elem.page.categories)
@@ -302,18 +307,18 @@ def multi_bindings_stage(dictDisplay:Dict[str, Mapping]=None, dictSynsetId: Dict
                                 if denominator != 0:
                                     score_base = numerator / denominator
                                     dictSortCandidates[key].append((elem, score_base))
-                                    if i < 1000:
+                                    if i < log_len:
                                         print(f'{elem.page.title}: {score_base}', dictWn[idWn].ctx, ctxw, 
-                                              sep='\n', end='\n', file=log_bindings_1000)
+                                              sep='\n', end='\n', file=log_bindings)
                                     if score_base > maxP:
                                         maxP = score_base
                                         maxagrument = elem
                                 else:
                                     baddenominator.append(elem.page.title)
                                     dictSortCandidates[key].append((elem, -1))
-                                    if i < 1000:
+                                    if i < log_len:
                                         print(f'{elem.page.title}: {-1}',dictWn[idWn].ctx, ctxw, 
-                                              sep='\n', end='\n', file=log_bindings_1000)
+                                              sep='\n', end='\n', file=log_bindings)
                             elif type_bindings == 'labse':
                                 first =  remove_non_ascii_cyrillic(elem.page.title + '[SEP]' + elem.page.first_sentence)
                                 sentence_hyper = f'{elem.page.title} - это тоже, что и {lemmaSynset}'
@@ -322,9 +327,9 @@ def multi_bindings_stage(dictDisplay:Dict[str, Mapping]=None, dictSynsetId: Dict
                                 if cosine_score > maxP:
                                     maxP = cosine_score
                                     maxagrument = elem
-                                if i < 1000:
+                                if i < log_len:
                                     print(f'{elem.page.title}: {cosine_score}', first, sentence_hyper,
-                                           sep='\n', end='\n', file=log_bindings_1000)
+                                           sep='\n', end='\n', file=log_bindings)
                             elif type_bindings == 'fasttext':
                                 pass
 
@@ -339,7 +344,7 @@ def multi_bindings_stage(dictDisplay:Dict[str, Mapping]=None, dictSynsetId: Dict
                     dictDisplay[w.page.title] = p
                 else:
                     badmaxP.append(key)
-        log_bindings_1000.close()
+        log_bindings.close()
         print("len(dictDisplay)", len(dictDisplay)) 
         print("len(badlemma)", len(badlemma))
         print("len(baddenominator)", len(baddenominator))

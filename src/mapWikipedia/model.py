@@ -3,6 +3,8 @@ from transformers import AutoModel, AutoTokenizer
 import numpy as np
 from tqdm import tqdm
 from torch import Tensor
+from .utils_local import cosine_similarity
+
 
 class SentenceBertTransformer:
     def __init__(self, model_name='setu4993/LaBSE', device='cpu', max_len=512):
@@ -60,15 +62,4 @@ class SentenceBertTransformer:
         '''
         sent1_embeding = self.transform(sent1)
         sent2_embeding = self.transform(sent2)
-        return np.dot(sent1_embeding, sent2_embeding) /(np.linalg.norm(sent2_embeding) * np.linalg.norm(sent1_embeding))
-
-
-
-def main():
-    labse = SentenceBertTransformer('intfloat/multilingual-e5-large', device="cuda")
-    labse.load_model()
-    print(labse.cosine_similarity('Как дела?', 'Как дела у тебя'))
-
-
-if __name__=='__main__':
-    main()
+        return cosine_similarity(sent1_embeding, sent2_embeding)
