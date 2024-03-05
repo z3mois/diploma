@@ -6,6 +6,7 @@ from ruwordnet import RuWordNet
 from typing import Any, List, Union, Dict
 from .classes import WnCtx, WikiSynset
 import pickle
+import re
 
 
 @lru_cache(maxsize=200000)
@@ -196,3 +197,6 @@ def sort_dict_by_key(dct:Dict[Any, Any]) -> Dict[Any, Any]:
     '''
     return dict(sorted(dct.items(), key=lambda x: x[0]))
 
+def remove_non_ascii_cyrillic(text):
+    """Удаляет из текста все символы, не являющиеся ни ASCII, ни русскими буквами."""
+    return re.sub(r'[^\x00-\x7Fа-яА-ЯёЁ]+', '', text)

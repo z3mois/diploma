@@ -9,7 +9,8 @@ from  .utils_local import (
     get_lemma_by_title,
     count1,
     sort_dict_by_key,
-    score, 
+    score,
+    remove_non_ascii_cyrillic
 )
 from .model import SentenceBertTransformer
 from collections import defaultdict
@@ -240,7 +241,8 @@ def delete_double_in_candidates(dictSynsetId: Dict[str, List[WikiSynset]]) ->  D
 
 
 def multi_bindings_stage(dictDisplay:Dict[str, Mapping]=None, dictSynsetId: Dict[str, List[WikiSynset]]=None, 
-                         wn:RuWordNet=None, dictWn:Dict[str, WnCtx]=None, type_bindings:str='base', mode:str='read'):
+                         wn:RuWordNet=None, dictWn:Dict[str, WnCtx]=None, type_bindings:str='base',
+                           model_name:str='setu4993/LaBSE', mode:str='read'):
     '''
         The stage of linking to a specific synset of a certain Wikipedia article
         param:
@@ -248,26 +250,35 @@ def multi_bindings_stage(dictDisplay:Dict[str, Mapping]=None, dictSynsetId: Dict
             dictSynsetId: dictSynsetId in format synset.id(121-N) -> List[WikiSynset]
             wn: RuWordNet 
             dictWn: dict from id ('101-N-100') to info about sense  
+            model_name: name model from HF to type_bindings = labse
             type_bindings: base(method from Archiv), labse(check only cosine similarity)
             mode: read or overwrite
         return:
            Answer dict after multi stage
     '''
+    file_prefix = '_'+type_bindings+ (model_name.replace('/', '') if type_bindings=='labse' else '')
+    print(file_prefix)
     if mode != 'read':
         dictSortCandidates = {}
         badlemma, baddenominator, badmaxP, badsynsetlemma, badidWn = [], [], [], [], []
         sortCandidates = sort_dict_by_key(dictSynsetId)
         dictIdTitle = {}
-        labse = SentenceBertTransformer(device="cuda")
-        labse.load_model()
+        if type_bindings == 'labse':
+            labse = SentenceBertTransformer(model_name=model_name, device="cuda")
+            labse.load_model()
         for synset in wn.synsets:
             dictIdTitle[synset.id] = synset.title
-        for key in tqdm(sortCandidates):
+        log_bindings_1000 = open(PATH_TO_TMP_FILE+f'log_bindings_1000{file_prefix}.txt', 'w')
+        for i, key in tqdm(enumerate(sortCandidates)):
+            if i < 1000:
+                print(key, file=log_bindings_1000)
             if len(sortCandidates[key]) == 1:
                     w = sortCandidates[key][0]
                     p = Mapping(w.page.id,w.page.revid,w.page.title, dictIdTitle[key], key, extractCtxW(w.page.links, w.page.categories), w.page.first_sentence)
                     dictDisplay[w.page.title]=p
                     dictSortCandidates[key] = [(sortCandidates[key][0], 1)]
+                    if i < 1000:
+                        print(w.page.title,end='\n', file=log_bindings_1000)
             else:
                 maxP = -1
                 maxagrument = 0
@@ -289,19 +300,34 @@ def multi_bindings_stage(dictDisplay:Dict[str, Mapping]=None, dictSynsetId: Dict
                                 else:
                                     badlemma.append(elem.page.title)
                                 if denominator != 0:
-                                    dictSortCandidates[key].append((elem, numerator / denominator))
-                                    if numerator / denominator > maxP:
-                                        maxP = numerator / denominator
+                                    score_base = numerator / denominator
+                                    dictSortCandidates[key].append((elem, score_base))
+                                    if i < 1000:
+                                        print(f'{elem.page.title}: {score_base}', dictWn[idWn].ctx, ctxw, 
+                                              sep='\n', end='\n', file=log_bindings_1000)
+                                    if score_base > maxP:
+                                        maxP = score_base
                                         maxagrument = elem
                                 else:
                                     baddenominator.append(elem.page.title)
                                     dictSortCandidates[key].append((elem, -1))
+                                    if i < 1000:
+                                        print(f'{elem.page.title}: {-1}',dictWn[idWn].ctx, ctxw, 
+                                              sep='\n', end='\n', file=log_bindings_1000)
                             elif type_bindings == 'labse':
-                                cosine_score = labse.cosine_similarity(f'{elem.page.title} - это тоже, что и {lemmaSynset}', elem.page.title + '[SEP]' + elem.page.first_sentence)
+                                first =  remove_non_ascii_cyrillic(elem.page.title + '[SEP]' + elem.page.first_sentence)
+                                sentence_hyper = f'{elem.page.title} - это тоже, что и {lemmaSynset}'
+                                if 'e5' in model_name:
+                                   first =  'query: ' + first
+                                   sentence_hyper = 'query: ' + sentence_hyper
+                                cosine_score = labse.cosine_similarity(sentence_hyper, first)
                                 dictSortCandidates[key].append((elem, cosine_score))
                                 if cosine_score > maxP:
                                     maxP = cosine_score
                                     maxagrument = elem
+                                if i < 1000:
+                                    print(f'{elem.page.title}: {cosine_score}', first, sentence_hyper,
+                                           sep='\n', end='\n', file=log_bindings_1000)
                     else:
                         badidWn.append(wn.get_senses(lemmaSynset)[0].id)
                 else:
@@ -313,7 +339,7 @@ def multi_bindings_stage(dictDisplay:Dict[str, Mapping]=None, dictSynsetId: Dict
                     dictDisplay[w.page.title] = p
                 else:
                     badmaxP.append(key)
-        print(dictDisplay)
+        log_bindings_1000.close()
         print("len(dictDisplay)", len(dictDisplay)) 
         print("len(badlemma)", len(badlemma))
         print("len(baddenominator)", len(baddenominator))
@@ -322,12 +348,12 @@ def multi_bindings_stage(dictDisplay:Dict[str, Mapping]=None, dictSynsetId: Dict
         print("len(badidWn)", len(badidWn))
 
         print("Start writing in file")
-        write_pkl(dictDisplay, PATH_TO_TMP_FILE+f'thr_dict_{type_bindings}.pkl')
-        write_pkl(dictSortCandidates, PATH_TO_TMP_FILE+f'dictSortCandidates_thr_stage_{type_bindings}.pkl')
+        write_pkl(dictDisplay, PATH_TO_TMP_FILE+f'thr_dict_{file_prefix}.pkl')
+        write_pkl(dictSortCandidates, PATH_TO_TMP_FILE+f'dictSortCandidates_thr_stage_{file_prefix}.pkl')
         print("Successful recording")
     else:
         print("Start reading from file")
-        dictDisplay = read_pkl(path=PATH_TO_TMP_FILE+f'thr_dict_{type_bindings}.pkl')
-        dictSortCandidates = read_pkl(path=PATH_TO_TMP_FILE+f'dictSortCandidates_thr_stage_{type_bindings}.pkl')
+        dictDisplay = read_pkl(path=PATH_TO_TMP_FILE+f'thr_dict_{file_prefix}.pkl')
+        dictSortCandidates = read_pkl(path=PATH_TO_TMP_FILE+f'dictSortCandidates_thr_stage_{file_prefix}.pkl')
         print("Successful reading")        
     return dictDisplay, dictSortCandidates

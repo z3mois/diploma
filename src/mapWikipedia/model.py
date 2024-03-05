@@ -2,7 +2,7 @@ import torch
 from transformers import AutoModel, AutoTokenizer
 import numpy as np
 from tqdm import tqdm
-
+from torch import Tensor
 
 class SentenceBertTransformer:
     def __init__(self, model_name='setu4993/LaBSE', device='cpu', max_len=512):
@@ -15,7 +15,12 @@ class SentenceBertTransformer:
         self.model = self.model.to(self.device)
         self.model = self.model.eval()
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-        
+
+    def average_pool(self, last_hidden_states: Tensor,
+                 attention_mask: Tensor) -> Tensor:
+        last_hidden = last_hidden_states.masked_fill(~attention_mask[..., None].bool(), 0.0)
+        return last_hidden.sum(dim=1) / attention_mask.sum(dim=1)[..., None]
+    
     def transform(self, text):
         inputs = self.tokenizer(
             [text], return_tensors="pt", padding=True, max_length=self.max_len, verbose=False, truncation=True
@@ -23,7 +28,9 @@ class SentenceBertTransformer:
         inputs = inputs.to(self.device)
         with torch.no_grad():
             outputs = self.model(**inputs)
-            
+        if 'e5' in self.model_name:
+            embeddings = self.average_pool(outputs.last_hidden_state, inputs['attention_mask'])
+            return embeddings[0].detach().cpu().numpy()
         return outputs[1][0].detach().cpu().numpy()
     
     def transform_batch(self, texts, bs=32):
@@ -51,4 +58,15 @@ class SentenceBertTransformer:
         '''
         sent1_embeding = self.transform(sent1)
         sent2_embeding = self.transform(sent2)
-        return np.dot(sent1_embeding, sent2_embeding) / (sum(sent2_embeding ** 2) * sum(sent1_embeding ** 2))
+        return np.dot(sent1_embeding, sent2_embeding) /(np.linalg.norm(sent2_embeding) * np.linalg.norm(sent1_embeding))
+
+
+
+def main():
+    labse = SentenceBertTransformer('intfloat/multilingual-e5-large', device="cuda")
+    labse.load_model()
+    print(labse.cosine_similarity('Как дела?', 'Как дела у тебя'))
+
+
+if __name__=='__main__':
+    main()
