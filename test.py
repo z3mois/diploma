@@ -11,7 +11,7 @@ from src.mapWikipedia import (
 )
 from src.mapWikidata import (
 
-    create_dataset_for_wikidata,extract_title_with_title_in_RuWordNet, extract_referring_pages, create_dict_candidates
+    create_dataset_for_wikidata,extract_title_with_title_in_RuWordNet, extract_referring_pages, create_dict_candidates, bindings, take_mapping, scoring
 )
 from config.const import DAMP_OF_WIKIPEDIA_PATH, DAMP_OF_WIKIDATA_PATH
 
@@ -43,4 +43,9 @@ from config.const import DAMP_OF_WIKIPEDIA_PATH, DAMP_OF_WIKIDATA_PATH
 
 
 a = extract_referring_pages(mode='read')
-print(len(create_dict_candidates(a, 'overwrite')))
+
+print(len(create_dict_candidates(a, 'read')))
+candidates = create_dict_candidates()
+score = bindings(candidates, 'read')
+mapping = take_mapping(score, candidates, 'read')
+print(scoring(mapping))

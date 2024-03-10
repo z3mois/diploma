@@ -1,10 +1,18 @@
 import pandas as pd
-from config.const import DAMP_OF_WIKIDATA_PATH, GOLD_DATA, GOLD_WIKIDATA_DATASET
+from config.const import (
+    DAMP_OF_WIKIDATA_PATH,
+    GOLD_DATA,
+    GOLD_WIKIDATA_DATASET,
+    PATH_TO_TMP_FILE
+)
 from os import listdir
 from os.path import isfile, join
 import json
 import numpy as np
 from tqdm import tqdm
+from typing import Dict
+from .classes import DisplaySynset2Wikidata
+from sklearn.metrics import accuracy_score
 
 
 def create_dataset_for_wikidata(path_to_wikipedia_dataset:str=GOLD_DATA, path_to_wikidata_dataset:str=GOLD_WIKIDATA_DATASET) -> None:
@@ -31,3 +39,12 @@ def create_dataset_for_wikidata(path_to_wikipedia_dataset:str=GOLD_DATA, path_to
     data['WikiDataGoldTitle'] = data['wiki_title_gold'].apply(lambda x: dict_wiki_to_wikidata[x][0]['ru'] if x in dict_wiki_to_wikidata else np.nan)
     data['WikiDataGoldId'] = data['wiki_title_gold'].apply(lambda x: dict_wiki_to_wikidata[x][1] if x in dict_wiki_to_wikidata else np.nan)
     data.to_csv(path_to_wikidata_dataset, index=False)
+
+
+def scoring(mapping: Dict[str, DisplaySynset2Wikidata]=None, path_to_gold:str=GOLD_WIKIDATA_DATASET):
+    data = pd.read_csv(path_to_gold)
+    data['predict_id'] = data['synset_id'].apply(lambda x: mapping[x].id if x in mapping else 'не связан')
+
+    score = accuracy_score(data[data['predict_id'] !='не связан'].WikiDataGoldId.astype(str), data[data['predict_id'] !='не связан'].predict_id.astype(str))
+    score_all = accuracy_score(data.WikiDataGoldId.astype(str), data.predict_id.astype(str))
+    return score, score_all, len(data[data['predict_id'] !='не связан']), len(data)
