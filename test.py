@@ -11,7 +11,7 @@ from src.mapWikipedia import (
 )
 from src.mapWikidata import (
 
-    create_dataset_for_wikidata,extract_title_with_title_in_RuWordNet, extract_referring_pages
+    create_dataset_for_wikidata,extract_title_with_title_in_RuWordNet, extract_referring_pages, create_dict_candidates
 )
 from config.const import DAMP_OF_WIKIPEDIA_PATH, DAMP_OF_WIKIDATA_PATH
 
@@ -37,10 +37,10 @@ from config.const import DAMP_OF_WIKIPEDIA_PATH, DAMP_OF_WIKIDATA_PATH
 
 # create_dataset_for_wikidata()
 
-to_add, articles = extract_title_with_title_in_RuWordNet(mode='overwtire')
+# to_add, articles = extract_title_with_title_in_RuWordNet(mode='read')
 
 
 
 
-# extract_referring_pages(DAMP_OF_WIKIDATA_PATH, to_add, articles, depth=10, mode='overwrite')
-
+a = extract_referring_pages(mode='read')
+print(len(create_dict_candidates(a, 'overwrite')))

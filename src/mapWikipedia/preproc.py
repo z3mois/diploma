@@ -230,17 +230,13 @@ def read_dump(path:str, mode:str = 'read') -> Tuple[List[Page], Dict[str, List[P
             pages.append(Page(id,revid,title,meaningPage,multiPage,categories,links,redirect, first_sentense))
         input.close()
         print('Finish read Wikipedia')
-        print('Start write Page in file data')
         write_pkl(pages, path=PATH_TO_TMP_FILE + "ctxw.pkl")
         write_pkl(dictRedirect, path=PATH_TO_TMP_FILE + PATH_TO_TMP_FILE + "dr.pkl")
         write_pkl(dictPageRedirect, path=PATH_TO_TMP_FILE + PATH_TO_TMP_FILE + "drp.pkl")
-        print('Finish frite')
     else:
-        print('Reading our data')
-        pages = read_pkl(PATH_TO_TMP_FILE + "ctxw.pkl")
-        dictRedirect = read_pkl(PATH_TO_TMP_FILE + "dr.pkl")
-        dictPageRedirect = read_pkl(PATH_TO_TMP_FILE + "drp.pkl")
-        print('Finish reading our data')
+        pages = read_pkl(path=PATH_TO_TMP_FILE + "ctxw.pkl")
+        dictRedirect = read_pkl(path=PATH_TO_TMP_FILE + "dr.pkl")
+        dictPageRedirect = read_pkl(path=PATH_TO_TMP_FILE + "drp.pkl")
     return pages, dictPageRedirect, dictRedirect
 
 def create_wikisynset(pages:List[Page]=None, dictPageRedirect:Dict[str, List[Page]]=None, mode:str='read') -> List[WikiSynset]:
@@ -295,13 +291,9 @@ def create_wikisynset(pages:List[Page]=None, dictPageRedirect:Dict[str, List[Pag
         print(f'Count wikipage with title in RuWordNet {includeTitle}')
         print(f'Count meaning page {meaningPageCounter}')
         print(f'Count multi page {multiPageCounter}')
-        print("Start writing in file")
         write_pkl(wiki, path=PATH_TO_TMP_FILE+'WikiSynset.pkl')
-        print("Successful recording")
     else:
-        print("Start reading from file")
         wiki=read_pkl(path=PATH_TO_TMP_FILE+'WikiSynset.pkl')
-        print("Successful reading")
     return wiki
 
 def create_info_about_sense(mode:str='read') -> Dict[str, WnCtx]:
@@ -328,13 +320,9 @@ def create_info_about_sense(mode:str='read') -> Dict[str, WnCtx]:
             dictWn[text_id] = WnCtx(text_id, ctx, lemma, text)
         print(f'Count sene = {countWn}')
         print('Finish extract data ')
-        print("Start writing in file")
         write_pkl(dictWn, path=PATH_TO_TMP_FILE+'ctxS.pkl')
-        print("Successful recording")
     else:
-        print("Start reading from file")
         dictWn=read_pkl(path=PATH_TO_TMP_FILE+'ctxS.pkl')
-        print("Successful reading")
     return dictWn
 
     

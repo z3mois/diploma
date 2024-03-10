@@ -8,6 +8,7 @@ from .classes import WnCtx, WikiSynset
 import pickle
 import re
 import numpy as np
+from functools import wraps
 
 
 @lru_cache(maxsize=200000)
@@ -21,6 +22,26 @@ def get_normal_form(word:str)-> str:
 
 morph_analizer = pymorphy2.MorphAnalyzer()
 wn = RuWordNet(filename_or_session=RUWORDNET_PATH)
+
+
+def log_file_operations(func):
+    '''
+    A decorator that logs the start and end of file operations (reading/writing) along with the file path.
+    This decorator wraps a function to add logging before and after its execution, indicating the start and end of a file operation. 
+    It identifies the type of operation (read or write) based on the wrapped function's name and logs it alongside the file path provided to the function.
+    Parameters:
+    - func (callable): The function to wrap. This function should involve reading from or writing to a file and must accept the file path as its first argument.
+    Returns:
+    - callable: A wrapped version of the input function with added logging functionality.        
+    '''
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        operation = 'writing to' if 'write' in func.__name__ else 'reading from'
+        print(f"Start {operation} file: {kwargs['path']}")
+        result = func(*args, **kwargs)
+        print(f"Finished {operation} file: {kwargs['path']}")
+        return result
+    return wrapper
 
 
 def my_split(x:str)->str:
@@ -129,7 +150,7 @@ def get_lemma_by_title(title:str, dictWn:Dict[str, WnCtx]) -> Union[None, str]:
         return get_lemma_by_id_sense(id, dictWn)
     return None
 
-
+@log_file_operations
 def read_pkl(path:str) -> Any:
     '''
         Read .pkl  file and returns what is in it
@@ -142,7 +163,7 @@ def read_pkl(path:str) -> Any:
     file.close()
     return varibles
 
-
+@log_file_operations
 def write_pkl(varibles:Any, path:str)->None:
     '''
         Write varibles  a .pkl file along the path

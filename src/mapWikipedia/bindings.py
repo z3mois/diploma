@@ -54,15 +54,11 @@ def unambiguous_bindings(wn:RuWordNet=None, dictWn:Dict[str, WnCtx]=None, wiki:L
                     new_wiki.append(wikisyn)
             else:
                 new_wiki.append(wikisyn)
-        print("Start writing in file")
-        write_pkl(dictDisplay, PATH_TO_TMP_FILE+'fst_dict.pkl')
-        write_pkl(new_wiki, PATH_TO_TMP_FILE+'wiki_after_fst_stage.pkl')
-        print("Successful recording")
+        write_pkl(dictDisplay, path=PATH_TO_TMP_FILE+'fst_dict.pkl')
+        write_pkl(new_wiki, path=PATH_TO_TMP_FILE+'wiki_after_fst_stage.pkl')
     else:
-        print("Start reading from file")
         dictDisplay = read_pkl(path=PATH_TO_TMP_FILE+'fst_dict.pkl')
         new_wiki = read_pkl(path=PATH_TO_TMP_FILE+'wiki_after_fst_stage.pkl')
-        print("Successful reading")
     return dictDisplay, new_wiki
 
 
@@ -92,14 +88,10 @@ def create_candidates_index_dict(wiki:List[WikiSynset]=None, dictWn:Dict[str, Wn
                         if not lemma_redirect in dictLemmaInIndex:
                             dictLemmaInIndex[lemma_redirect] = []
                         dictLemmaInIndex[lemma_redirect].append(index)
-        print('Dict candidates creatted')
-        print("Start writing in file")
-        write_pkl(dictLemmaInIndex, PATH_TO_TMP_FILE+name)
-        print("Successful recording")
+        print('Dict candidates created')
+        write_pkl(dictLemmaInIndex, path=PATH_TO_TMP_FILE+name)
     else:
-        print("Start reading from file")
         dictLemmaInIndex = read_pkl(path=PATH_TO_TMP_FILE+name)
-        print("Successful reading")
     return dictLemmaInIndex
 
 
@@ -139,13 +131,9 @@ def create_candidates_for_multi_stage(wiki:List[WikiSynset]=None, wn:RuWordNet=N
                                 for indexElem in dictLemmaInIndex[lemma]:
                                     dictSynsetId[synset.id].append(wiki[indexElem]) 
         print(f'Was added from links {countLinksAdd}')
-        print(f"Start writing in file = {PATH_TO_TMP_FILE+'candidates_for_multi_stage.pkl'}")
-        write_pkl(dictSynsetId, PATH_TO_TMP_FILE+'candidates_for_multi_stage.pkl')
-        print("Successful recording")
+        write_pkl(dictSynsetId, path=PATH_TO_TMP_FILE+'candidates_for_multi_stage.pkl')
     else:
-        print(f"Start reading from file = {PATH_TO_TMP_FILE+'candidates_for_multi_stage.pkl'}")
         dictSynsetId = read_pkl(path=PATH_TO_TMP_FILE+'candidates_for_multi_stage.pkl')
-        print("Successful reading")
     return dictSynsetId
 
 def add_multi_flag(wiki_pages:List[WikiSynset], dictLemmaInIndex:Dict[str, int]):
@@ -207,15 +195,12 @@ def second_stage_bindings(wn:RuWordNet=None, dictWn:Dict[str, WnCtx]=None, wiki:
             if not flag:
                 wiki_for_multi.append(w)
         print(f"There were {countN} entities connected")
-        print("Start writing in file")
-        write_pkl(dictDisplay, PATH_TO_TMP_FILE+'snd_dict.pkl')
-        write_pkl(wiki_for_multi, PATH_TO_TMP_FILE+'wiki_after_snd_stage.pkl')
-        print("Successful recording")
+        write_pkl(dictDisplay, path=PATH_TO_TMP_FILE+'snd_dict.pkl')
+        write_pkl(wiki_for_multi, path=PATH_TO_TMP_FILE+'wiki_after_snd_stage.pkl')
     else:
         print("Start reading from file")
         dictDisplay = read_pkl(path=PATH_TO_TMP_FILE+'snd_dict.pkl')
         wiki_for_multi = read_pkl(path=PATH_TO_TMP_FILE+'wiki_after_snd_stage.pkl')
-        print("Successful reading")
     return dictDisplay, wiki_for_multi
 
 
@@ -366,13 +351,9 @@ def multi_bindings_stage(dictDisplay:Dict[str, Mapping]=None, dictSynsetId: Dict
         print("len(badsynsetlemma)", len(badsynsetlemma))
         print("len(badidWn)", len(badidWn))
 
-        print("Start writing in file")
-        write_pkl(dictDisplay, PATH_TO_TMP_FILE+f'thr_dict_{file_prefix}.pkl')
-        write_pkl(dictSortCandidates, PATH_TO_TMP_FILE+f'dictSortCandidates_thr_stage_{file_prefix}.pkl')
-        print("Successful recording")
+        write_pkl(dictDisplay, path=PATH_TO_TMP_FILE+f'thr_dict_{file_prefix}.pkl')
+        write_pkl(dictSortCandidates, path=PATH_TO_TMP_FILE+f'dictSortCandidates_thr_stage_{file_prefix}.pkl')
     else:
-        print("Start reading from file")
         dictDisplay = read_pkl(path=PATH_TO_TMP_FILE+f'thr_dict_{file_prefix}.pkl')
-        dictSortCandidates = read_pkl(path=PATH_TO_TMP_FILE+f'dictSortCandidates_thr_stage_{file_prefix}.pkl')
-        print("Successful reading")        
+        dictSortCandidates = read_pkl(path=PATH_TO_TMP_FILE+f'dictSortCandidates_thr_stage_{file_prefix}.pkl')     
     return dictDisplay, dictSortCandidates

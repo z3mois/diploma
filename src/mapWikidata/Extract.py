@@ -10,7 +10,7 @@ from ..mapWikipedia import (
     read_pkl,
     create_info_about_sense,
     wn,
-    remove_non_ascii_cyrillic
+    remove_non_ascii_cyrillic,
 )
 from .utils_local import (
     is_lat
@@ -53,14 +53,11 @@ def extract_title_with_title_in_RuWordNet(path_to_data:str=DAMP_OF_WIKIDATA_PATH
                                 for elem in info['rels']:
                                     to_add.add(elem['rel_id'])     
         print(f'Was found {len(tweets)} articles and need to add {len(to_add)}')
-        write_pkl(to_add, PATH_TO_TMP_FILE+'titleWn_to_add.pkl')
-        write_pkl(tweets, PATH_TO_TMP_FILE+'titleWn_tweets.pkl')
-        print('First stage reading end')
+        write_pkl(to_add, path=PATH_TO_TMP_FILE+'titleWn_to_add.pkl')
+        write_pkl(tweets, path=PATH_TO_TMP_FILE+'titleWn_tweets.pkl')
     else:
-        print("Start reading from file")
-        to_add = read_pkl(PATH_TO_TMP_FILE+'titleWn_to_add.pkl')
-        tweets = read_pkl(PATH_TO_TMP_FILE+'titleWn_tweets.pkl')
-        print("Successful recording")
+        to_add = read_pkl(path=PATH_TO_TMP_FILE+'titleWn_to_add.pkl')
+        tweets = read_pkl(path=PATH_TO_TMP_FILE+'titleWn_tweets.pkl')
     return to_add, tweets
 
 
@@ -106,15 +103,12 @@ def extract_referring_pages(path_to_data:str=DAMP_OF_WIKIDATA_PATH, to_add:set[s
                                     new_to_add.add(elem['rel_id'])
                             except:
                                 pass
-                        elif info['label'] and info['id'] in to_add:
+                        elif info['label'] and info['id'] in to_add and 'en' in info['label']:
                             for elem in info['rels']:
                                 new_to_add.add(elem['rel_id'])
                             articles.append(WikidataPage(info, info['label']['en']))
         print(f'Was found {len(articles)} articles')
-        write_pkl(articles, PATH_TO_TMP_FILE+'articles_all.pkl')
-        print('Second stage reading end')
+        write_pkl(articles, path=PATH_TO_TMP_FILE+'articles_all.pkl')
     else:
-        print("Start reading from file")
-        articles = read_pkl(PATH_TO_TMP_FILE+'articles_all.pkl')
-        print("Successful recording")
+        articles = read_pkl(path=PATH_TO_TMP_FILE+'articles_all.pkl')
     return articles
