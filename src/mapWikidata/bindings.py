@@ -12,14 +12,17 @@ from ..mapWikipedia import (
     read_pkl,
     create_info_about_sense,
     wn,
-    remove_non_ascii_cyrillic
+    remove_non_ascii_cyrillic,
+    SentenceBertTransformer,
+    cosine_similarity
 )
-from config.const import PATH_TO_TMP_FILE
+from config.const import PATH_TO_TMP_FILE, PATH_TO_FASTTEXT
 from .utils_local import (
     get_score,
     extract_ctx_wikidata
 )
-
+import fasttext
+import numpy as np
 
 def create_dict_candidates(articles:List[WikidataPage]=None,
                             mode:str='read') -> Dict[str, List[WikidataPage]]:
@@ -54,7 +57,8 @@ def create_dict_candidates(articles:List[WikidataPage]=None,
     return canidates
 
 
-def bindings(candidates:Dict[str, List[WikidataPage]]=None, mode:str='read')-> Dict[str, List[float]]:
+def bindings(candidates:Dict[str, List[WikidataPage]]=None, type_bindings:str='base',
+                           model_name:str='setu4993/LaBSE', log_len:int=1000, mode:str='read')-> Dict[str, List[float]]:
     '''
         This is the function of linking a wikidata page to a specific synset (similar to wikipedia, here we immediately assume that all cases are ambiguous)
 
@@ -65,27 +69,77 @@ def bindings(candidates:Dict[str, List[WikidataPage]]=None, mode:str='read')-> D
         Returns:
             Dict[str, List[float]]: A dictionary where keys are synset IDs and values are lists
     '''
+    file_prefix = type_bindings+ (model_name.replace('/', '') if type_bindings=='labse' else '') + '_'
+    if type_bindings == 'labse':
+            labse = SentenceBertTransformer(model_name=model_name, device="cuda")
+            labse.load_model()
+    elif type_bindings == 'fasttext':
+        ft = fasttext.load_model(PATH_TO_FASTTEXT)
     if mode != 'read':
-        dictWn = create_info_about_sense()
-        score_dict = defaultdict(list)
-        for _, (title_synset, candidatess) in tqdm(enumerate(candidates.items())):
-            for wikipage in candidatess:
-                candidate, lemma = wikipage.page, wikipage.lemma 
-                if 'N' in wn[lemma][0].id:
-                    synset_ctx = dictWn[wn[lemma][0].id].ctx
-                    article_ctx = extract_ctx_wikidata(candidate)
-                    article_ctx.update([candidate['label']['ru'].lower(), lemma.lower()])
-                    score = get_score(article_ctx, synset_ctx)
-                    score_dict[title_synset].append(score)
-                else:
-                    score_dict[title_synset].append(0.0)
-        write_pkl(score_dict, path=PATH_TO_TMP_FILE+'score_wikidata.pkl')
+        with open(PATH_TO_TMP_FILE+f'log_bindings_{log_len}{file_prefix}.txt', 'w') as log_file:
+            dictWn = create_info_about_sense()
+            score_dict = defaultdict(list)
+            i = 0
+            for _, (title_synset, candidatess) in tqdm(enumerate(candidates.items())):
+                if i < log_len:
+                    print(f'-----Synset: {title_synset}--------',
+                        sep='\n', end='\n', file=log_file)
+                for wikipage in candidatess:
+                    candidate, lemma = wikipage.page, wikipage.lemma
+                    title = remove_non_ascii_cyrillic(candidate['label']['ru'])
+                    if type_bindings == 'base':
+                        if 'N' in wn[lemma][0].id:
+                            synset_ctx = dictWn[wn[lemma][0].id].ctx
+                            article_ctx = extract_ctx_wikidata(candidate)
+                            article_ctx.update([candidate['label']['ru'].lower(), lemma.lower()])
+                            score = get_score(article_ctx, synset_ctx)
+                            score_dict[title_synset].append(score)
+                            if i < log_len:
+                                print(f'{title}: {score}', 'ctx-article:', article_ctx, f'synset_ctx: {synset_ctx}',
+                                    sep='\n', end='\n', file=log_file)
+                        else:
+                            print(f'{title}: {0.0}', 'lemma is not N: lemma',
+                                    sep='\n', end='\n', file=log_file)
+                            score_dict[title_synset].append(0.0)
+                    elif type_bindings == 'fasttext':
+                        article_ctx = extract_ctx_wikidata(candidate)
+                        article_ctx.update([candidate['label']['ru'].lower(), lemma.lower()])
+                        embed_wiki_page = np.zeros(ft.get_dimension())
+                        ctxw = set(map(remove_non_ascii_cyrillic, article_ctx))
+                        for word in ctxw:
+                            embed_wiki_page += ft.get_word_vector(word)
+                        average_embedding_wiki_page = embed_wiki_page / len(ctxw)
+
+                        embed_title_synset = ft.get_word_vector(title_synset)
+                        score = cosine_similarity(average_embedding_wiki_page, embed_title_synset)
+                        score_dict[title_synset].append(score)
+                        if i < log_len:
+                            print(f'{title}: {score}', 'ctx-article:', article_ctx, f'synset title for embed: {title_synset}',
+                                sep='\n', end='\n', file=log_file)
+                    elif type_bindings == 'labse':
+                        
+                        if candidate['descriptions']:
+                            sentence = candidate['descriptions']['ru'] if 'ru' in candidate['descriptions'] else candidate['descriptions']['en']
+                        else:
+                            sentence = 'описания нет'
+                        first =  title + '[SEP]' + remove_non_ascii_cyrillic( sentence)
+
+                        sentence_hyper = f'{title} - это тоже, что и {title_synset}'
+                        cosine_score = labse.cosine_similarity(sentence_hyper, first)
+                        score_dict[title_synset].append(cosine_score)
+                        if i < log_len:
+                            print(f'{title}: {cosine_score}', first, sentence_hyper,
+                                sep='\n', end='\n', file=log_file)
+                i += 1
+        
+        write_pkl(score_dict, path=PATH_TO_TMP_FILE + file_prefix + 'score_wikidata.pkl')
     else:
-        score_dict = read_pkl(path=PATH_TO_TMP_FILE+'score_wikidata.pkl')
+        score_dict = read_pkl(path=PATH_TO_TMP_FILE + file_prefix + 'score_wikidata.pkl')
     return score_dict
 
 
-def take_mapping(score:Dict[str, List[float]]=None, candidates:Dict[str, List[WikidataPage]]=None, 
+def take_mapping(score:Dict[str, List[float]]=None, candidates:Dict[str, List[WikidataPage]]=None,
+                  type_bindings:str='base', model_name:str='setu4993/LaBSE',
                  mode:str='read') -> Dict[str, DisplaySynset2Wikidata]:
     '''
     Description:
@@ -99,6 +153,7 @@ def take_mapping(score:Dict[str, List[float]]=None, candidates:Dict[str, List[Wi
     Returns:
         Dict[str, DisplaySynset2Wikidata]: A dictionary where keys are synset IDs and values are DisplaySynset2Wikidata objects representing the highest-scoring mappings.
     '''
+    file_prefix = type_bindings+ (model_name.replace('/', '') if type_bindings=='labse' else '') + '_'
     if mode != 'read':
         res_score = {}
         for _, (title_synset, candidatess) in tqdm(enumerate(candidates.items())):
@@ -106,7 +161,7 @@ def take_mapping(score:Dict[str, List[float]]=None, candidates:Dict[str, List[Wi
             if sorted_lst and 'N' in title_synset:
                 best:Tuple[WikidataPage, float] = sorted_lst[0]
                 res_score[title_synset] = DisplaySynset2Wikidata(best[0].page['id'], best[0].page['label'], best[0].lemma, wn[best[0].lemma][0].id, best[1], title_synset)
-        write_pkl(res_score, path=PATH_TO_TMP_FILE+'bindings.pkl')
+        write_pkl(res_score, path=PATH_TO_TMP_FILE + file_prefix + 'score_wikidata.pkl')
     else:
-        res_score = read_pkl(path=PATH_TO_TMP_FILE+'bindings.pkl')
+        res_score = read_pkl(path=PATH_TO_TMP_FILE + file_prefix + 'score_wikidata.pkl')
     return res_score

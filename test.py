@@ -46,6 +46,10 @@ a = extract_referring_pages(mode='read')
 
 print(len(create_dict_candidates(a, 'read')))
 candidates = create_dict_candidates()
-score = bindings(candidates, 'read')
-mapping = take_mapping(score, candidates, 'read')
+# candidates:Dict[str, List[WikidataPage]]=None, type_bindings:str='base',
+#                            model_name:str='setu4993/LaBSE', log_len:int=1000, mode:str='read'
+model_name='intfloat/multilingual-e5-large'
+type_bindings = 'labse'
+score = bindings(candidates, type_bindings=type_bindings, model_name=model_name, log_len=100, mode='overwrite' )
+mapping = take_mapping(score=score, candidates=candidates, type_bindings=type_bindings, model_name=model_name, mode='overwrite')
 print(scoring(mapping))
