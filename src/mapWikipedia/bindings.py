@@ -229,7 +229,7 @@ def delete_double_in_candidates(dictSynsetId: Dict[str, List[WikiSynset]]) ->  D
 
 def multi_bindings_stage(dictDisplay:Dict[str, Mapping]=None, dictSynsetId: Dict[str, List[WikiSynset]]=None, 
                          wn:RuWordNet=None, dictWn:Dict[str, WnCtx]=None, type_bindings:str='base',
-                           model_name:str='setu4993/LaBSE', log_len:int=1000, mode:str='read'):
+                           model_name:str='setu4993/LaBSE', log_len:int=1000, mode:str='read') -> Tuple[Dict[str, Mapping], Dict[str, List[Tuple[WikiSynset, float]]]]:
     '''
         The stage of linking to a specific synset of a certain Wikipedia article
         param:
@@ -306,7 +306,7 @@ def multi_bindings_stage(dictDisplay:Dict[str, Mapping]=None, dictSynsetId: Dict
                                               sep='\n', end='\n', file=log_bindings)
                             elif type_bindings == 'labse':
                                 first =  remove_non_ascii_cyrillic(elem.page.title + '[SEP]' + elem.page.first_sentence)
-                                sentence_hyper = f'{elem.page.title} - это тоже, что и {lemmaSynset}'
+                                sentence_hyper = f'{elem.page.title} - это то же, что и {lemmaSynset}'
                                 cosine_score = labse.cosine_similarity(sentence_hyper, first)
                                 dictSortCandidates[key].append((elem, cosine_score))
                                 if cosine_score > maxP:
@@ -357,3 +357,70 @@ def multi_bindings_stage(dictDisplay:Dict[str, Mapping]=None, dictSynsetId: Dict
         dictDisplay = read_pkl(path=PATH_TO_TMP_FILE+f'thr_dict_{file_prefix}.pkl')
         dictSortCandidates = read_pkl(path=PATH_TO_TMP_FILE+f'dictSortCandidates_thr_stage_{file_prefix}.pkl')     
     return dictDisplay, dictSortCandidates
+
+
+def clear_bad_bindings_for_fourth_stage(dictDisplay):
+    dict_wordId_in_display_and_key = defaultdict(list)
+    for key, value in dictDisplay.items():
+        dict_wordId_in_display_and_key[value.wordId].append((key,value))
+    #удалим из dictDisplay повторяющиеся wordId
+    for key, value in dict_wordId_in_display_and_key.items():
+        if len(value) > 1:
+            for item in value:
+                del dictDisplay[item[0]]
+    #удалим из dict_wordId_in_display_and_key однозначные отображенния
+    dict_wordId_in_display_and_key_new = defaultdict(list)
+    for key, value in dict_wordId_in_display_and_key.items():
+        if len(value) > 1:
+            dict_wordId_in_display_and_key_new[key] = value
+    print(dict_wordId_in_display_and_key_new)
+
+def mean_score(dict_first_method:Dict[str, List[Tuple[WikiSynset, float]]], dict_second_method:Dict[str, List[Tuple[WikiSynset, float]]], wn:RuWordNet) -> Dict[str, Mapping]:
+    """
+        Комбинируйте результаты, полученные по разным методикам, для повышения точности.
+
+        Параметры:
+        - dict_first_method (Dict[str, Any]): результаты первой методики, сохраненные в виде словаря.
+        - dict_second_method (Dict[str, Any]): Результаты второй методики, сохраненные в виде словаря.
+        - wn (WordNetCorpusReader): Экземпляр WordNetCorpusReader для получения информации о синхронизации WordNet.
+
+        Возвращается:
+        Dict[str, Union[str, Any]]: Комбинированные оценки и подробные сведения, представленные в виде словаря.
+ 
+    """
+    dictDisplay = {}
+    dictIdTitle = {}
+    for synset in wn.synsets:
+        dictIdTitle[synset.id] = synset.title
+    keys = list(dict_first_method.keys()) + list(dict_second_method.keys())
+    for key in keys:
+        maxP = -100
+        maxagrument = None        
+        if key in dict_first_method and key in dict_second_method:
+            for wikisynset, score in dict_first_method[key]:
+                for wikisynset2, score2 in dict_second_method[key]:
+                    if wikisynset2.page.id == wikisynset.page.id:
+                        if score != -1:
+                            if score2 != -1:
+                                score_tmp = score + score2
+                            else:
+                                score_tmp = score
+                        else:
+                            score_tmp = -1
+                        if score_tmp > maxP:
+                            maxagrument = wikisynset
+                            maxP = score_tmp
+        else:
+            dict_for_iter =  dict_first_method if key in dict_first_method else  dict_second_method
+            for wikisynset, score in dict_for_iter[key]:
+                if score > maxP:
+                    maxagrument = wikisynset
+                    maxP = score        
+        if maxagrument is not None:
+            w = maxagrument
+            p = Mapping(w.page.id,w.page.revid,w.page.title,dictIdTitle[key], key,
+                        extractCtxW(w.page.links, w.page.categories), w.page.first_sentence)
+            dictDisplay[w.page.title] = p
+    return dictDisplay
+
+    
