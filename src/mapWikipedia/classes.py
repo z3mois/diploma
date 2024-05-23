@@ -72,6 +72,17 @@ class Mapping:
     wordId:int
     ctxW:set
     first_sentense:str
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "revid": self.revid,
+            "title": self.title,
+            "lemma": self.lemma,
+            "wordId": self.wordId,
+            "ctxW": list(self.ctxW),
+            "first_sentense": self.first_sentense
+        }
+
 class MappingEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, Mapping):

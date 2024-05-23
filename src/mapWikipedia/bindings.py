@@ -1,5 +1,5 @@
 from tqdm import tqdm
-from .classes import Mapping, WnCtx, WikiSynset
+from .classes import Mapping, WnCtx, WikiSynset, Page
 from  .utils_local import (
     clear_title,
     read_pkl,
@@ -229,7 +229,7 @@ def delete_double_in_candidates(dictSynsetId: Dict[str, List[WikiSynset]]) ->  D
 
 def multi_bindings_stage(dictDisplay:Dict[str, Mapping]=None, dictSynsetId: Dict[str, List[WikiSynset]]=None, 
                          wn:RuWordNet=None, dictWn:Dict[str, WnCtx]=None, type_bindings:str='base',
-                           model_name:str='setu4993/LaBSE', log_len:int=1000, mode:str='read') -> Tuple[Dict[str, Mapping], Dict[str, List[Tuple[WikiSynset, float]]]]:
+                           model_name:str='setu4993/LaBSE', log_len:int=1000, stage_preffix: str='thr', mode:str='read') -> Tuple[Dict[str, Mapping], Dict[str, List[Tuple[WikiSynset, float]]]]:
     '''
         The stage of linking to a specific synset of a certain Wikipedia article
         param:
@@ -240,6 +240,7 @@ def multi_bindings_stage(dictDisplay:Dict[str, Mapping]=None, dictSynsetId: Dict
             model_name: name model from HF to type_bindings = labse
             type_bindings: base(method from Archiv), labse(check only cosine similarity), fasttext (check similarity fasttext embeddings)
             model_name: model_name for method labse(for exmaple: setu4993/LaBSE, intfloat/multilingual-e5-large)
+            stage_preffix: for file path
             mode: read or overwrite
         return:
            Answer dict after multi stage
@@ -351,29 +352,45 @@ def multi_bindings_stage(dictDisplay:Dict[str, Mapping]=None, dictSynsetId: Dict
         print("len(badsynsetlemma)", len(badsynsetlemma))
         print("len(badidWn)", len(badidWn))
 
-        write_pkl(dictDisplay, path=PATH_TO_TMP_FILE+f'thr_dict_{file_prefix}.pkl')
-        write_pkl(dictSortCandidates, path=PATH_TO_TMP_FILE+f'dictSortCandidates_thr_stage_{file_prefix}.pkl')
+        write_pkl(dictDisplay, path=PATH_TO_TMP_FILE+f'{stage_preffix}_dict_{file_prefix}.pkl')
+        write_pkl(dictSortCandidates, path=PATH_TO_TMP_FILE+f'dictSortCandidates_{stage_preffix}_stage_{file_prefix}.pkl')
     else:
-        dictDisplay = read_pkl(path=PATH_TO_TMP_FILE+f'thr_dict_{file_prefix}.pkl')
-        dictSortCandidates = read_pkl(path=PATH_TO_TMP_FILE+f'dictSortCandidates_thr_stage_{file_prefix}.pkl')     
+        dictDisplay = read_pkl(path=PATH_TO_TMP_FILE+f'{stage_preffix}_dict_{file_prefix}.pkl')
+        dictSortCandidates = read_pkl(path=PATH_TO_TMP_FILE+f'dictSortCandidates_{stage_preffix}_stage_{file_prefix}.pkl')     
     return dictDisplay, dictSortCandidates
 
-
-def clear_bad_bindings_for_fourth_stage(dictDisplay):
+# dictDisplay, dictSortCandidates
+def prepare_data_for_new_stage(dictDisplay, dictt):
     dict_wordId_in_display_and_key = defaultdict(list)
     for key, value in dictDisplay.items():
         dict_wordId_in_display_and_key[value.wordId].append((key,value))
     #удалим из dictDisplay повторяющиеся wordId
+    print('before',len(dictDisplay), len(dictt))
     for key, value in dict_wordId_in_display_and_key.items():
         if len(value) > 1:
             for item in value:
                 del dictDisplay[item[0]]
+                if item[0] in dictt:
+                    del dictt[item[0]]
+    print('after',len(dictDisplay), len(dictt))
     #удалим из dict_wordId_in_display_and_key однозначные отображенния
     dict_wordId_in_display_and_key_new = defaultdict(list)
-    for key, value in dict_wordId_in_display_and_key.items():
+    for key, (value) in dict_wordId_in_display_and_key.items():
         if len(value) > 1:
             dict_wordId_in_display_and_key_new[key] = value
-    print(dict_wordId_in_display_and_key_new)
+    to_bindings = defaultdict(list)
+    for sysnet_id, list_mapping  in dict_wordId_in_display_and_key.items():
+        # # 
+        # if sysnet_id in dictScoredCandidates:
+        #     set_to_add = set([mapping.id for (_, mapping) in list_mapping])
+        #     for i, (wikisynset, _) in enumerate(dictScoredCandidates[sysnet_id]):
+        #         if wikisynset.page.id in set_to_add:
+        #             to_bindings[sysnet_id].append(dictScoredCandidates[sysnet_id][i][0])
+        # else:
+        for title, mapp in list_mapping:
+            to_bindings[sysnet_id].append(WikiSynset(page=Page(mapp.id, revid=mapp.revid, title=title, meaningPage=False, multiPage=True,
+                                                                categories=mapp.ctxW, links=mapp.ctxW, redirect=False, first_sentence=mapp.first_sentense)))
+    return dictDisplay,dictt, to_bindings
 
 def mean_score(dict_first_method:Dict[str, List[Tuple[WikiSynset, float]]], dict_second_method:Dict[str, List[Tuple[WikiSynset, float]]], wn:RuWordNet) -> Dict[str, Mapping]:
     """

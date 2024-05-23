@@ -23,6 +23,8 @@ from .utils_local import (
 )
 import fasttext
 import numpy as np
+import pandas as pd
+
 
 def create_dict_candidates(articles:List[WikidataPage]=None,
                             mode:str='read') -> Dict[str, List[WikidataPage]]:
@@ -161,7 +163,55 @@ def take_mapping(score:Dict[str, List[float]]=None, candidates:Dict[str, List[Wi
             if sorted_lst and 'N' in title_synset:
                 best:Tuple[WikidataPage, float] = sorted_lst[0]
                 res_score[title_synset] = DisplaySynset2Wikidata(best[0].page['id'], best[0].page['label'], best[0].lemma, wn[best[0].lemma][0].id, best[1], title_synset)
-        write_pkl(res_score, path=PATH_TO_TMP_FILE + file_prefix + 'score_wikidata.pkl')
+        write_pkl(res_score, path=PATH_TO_TMP_FILE + file_prefix + 'score_wikidata_final.pkl')
     else:
-        res_score = read_pkl(path=PATH_TO_TMP_FILE + file_prefix + 'score_wikidata.pkl')
+        res_score = read_pkl(path=PATH_TO_TMP_FILE + file_prefix + 'score_wikidata_final.pkl')
     return res_score
+
+
+
+def find_hyponym(articles, mapping, id2idx, set_candidates_id):
+    mapping2id = {value.id:key for key, value in mapping.items()}
+    candidates_for_elem  = defaultdict(set)
+    counter = 0
+    for _, elem in tqdm(enumerate(articles)):
+        for rels in elem.page['rels']:
+            if rels['type'] == 'subclass_of' and rels['rel_id'] in mapping2id:
+                candidates_for_elem[rels['rel_id']].add(elem.page['id'])
+                counter += 1
+
+    df_res= pd.DataFrame({'hyperonym_id':candidates_for_elem.keys(), 'candidates_id':candidates_for_elem.values()})
+    df_res['hyperonym_title'] = df_res['hyperonym_id'].apply(lambda x: articles[id2idx[x]].page['label'])
+    def convert(lst):
+        l = []
+        for i in lst:
+            try:
+                l.append(articles[id2idx[i]].page['label']['ru'] if 'ru' in articles[id2idx[i]].page['label'] else articles[id2idx[i]].page['label']['en'])
+            except:
+                l.append('bad_name')
+        return '; '.join(l)
+    dictWn = create_info_about_sense()
+    def in_wn(titles, ids):
+        res = []
+        for title, id in zip(titles.split( '; '), ids):
+            if title != 'bad_name':
+                lemma = get_lemma_by_title(title, dictWn)
+                if not lemma and id in set_candidates_id:
+                    res.append((title, 2))
+                elif not lemma:
+                    res.append((title, 1))
+                else:
+                    res.append((title, 0))
+            else:
+                res.append((title, 0))
+        res = sorted(res, key=lambda x: -x[1])
+        return res
+
+    df_res['candidates_title'] = df_res['candidates_id'].apply(lambda x: convert(x))
+    df_res['sort_by_wn'] = df_res.apply(lambda row: in_wn(row['candidates_title'], row['candidates_id']), axis=1)
+    df_res['candidates_id'] = df_res['candidates_id'].apply(lambda x: '; '.join(x))
+    df_res['wordnet_lemma'] = df_res['hyperonym_id'].apply(lambda x: mapping[mapping2id[x]].lemma)
+    df_res['id_for_sort'] = df_res['hyperonym_id'].apply(lambda x: int(x[1:]))
+    df_res = df_res.sort_values(by='id_for_sort').reset_index(drop=True)
+    df_res.to_excel(PATH_TO_TMP_FILE+'candidates1.xlsx', index=False)
+    return df_res

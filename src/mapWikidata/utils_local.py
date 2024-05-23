@@ -1,10 +1,9 @@
 from emoji import UNICODE_EMOJI
-from collections import deque
 import re
 from ..mapWikipedia import (
     get_normal_form
 )
-
+from collections import deque
 
 chars = set(["-", " ", ':', '(', ')', '.', ',', '{', '}', '?', '!', ';', '\"', "\'", '+', '=', '*'])
 
@@ -69,3 +68,5 @@ def get_score(elem1:set, elem2:set) -> float:
             float: The similarity score between the two sets, ranging from 0 to 1
     '''
     return (len((elem1 & elem2)) + 1) / (len(elem1) + len(elem2) + 1)
+
+

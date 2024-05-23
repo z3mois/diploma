@@ -15,6 +15,7 @@ from ..mapWikipedia import (
 from .utils_local import (
     is_lat
 )
+from collections import defaultdict
 from typing import Tuple, List
 from .classes import WikidataPage
 
@@ -82,7 +83,7 @@ def extract_referring_pages(path_to_data:str=DAMP_OF_WIKIDATA_PATH, to_add:set[s
         dictWn = create_info_about_sense()
         for i in tqdm(range(depth)):
             if i != 0:
-                to_add = new_to_add
+                to_add = to_add.union(new_to_add)
             print(len(to_add))
             new_to_add:set[str] = set()
             for file in onlyfiles:
@@ -112,3 +113,28 @@ def extract_referring_pages(path_to_data:str=DAMP_OF_WIKIDATA_PATH, to_add:set[s
     else:
         articles = read_pkl(path=PATH_TO_TMP_FILE+'articles_all.pkl')
     return articles
+
+def create_graph(articles, mode='read'):
+    if mode != 'read':
+
+        graph_path_straight = defaultdict(set)
+        graph_path_inverse = defaultdict(set)
+        id_artircle2idx_article = {}
+        idx_article2id_artircle = {}
+        for idx, wikidatapahe in tqdm(enumerate(articles)):
+            article = wikidatapahe.page
+            id_artircle2idx_article[article['id']] = idx
+            idx_article2id_artircle[idx] = article['id']
+            for link in article['rels']:
+                graph_path_straight[link['rel_id']].add(article['id'])
+                graph_path_inverse[article['id']].add(link['rel_id'])
+        write_pkl(graph_path_straight, path=PATH_TO_TMP_FILE + 'graph_path_straight.pkl')
+        write_pkl(graph_path_inverse, path=PATH_TO_TMP_FILE  + 'graph_path_inverse.pkl')
+        write_pkl(id_artircle2idx_article, path=PATH_TO_TMP_FILE + 'id_artircle2idx_article.pkl')
+        write_pkl(idx_article2id_artircle, path=PATH_TO_TMP_FILE  + 'idx_article2id_artircle.pkl')
+    else:
+        graph_path_straight = read_pkl(path=PATH_TO_TMP_FILE + 'graph_path_straight.pkl')
+        graph_path_inverse = read_pkl(path=PATH_TO_TMP_FILE + 'graph_path_inverse.pkl')
+        id_artircle2idx_article = read_pkl(path=PATH_TO_TMP_FILE + 'id_artircle2idx_article.pkl')
+        idx_article2id_artircle = read_pkl(path=PATH_TO_TMP_FILE + 'idx_article2id_artircle.pkl')
+    return graph_path_straight, graph_path_inverse, id_artircle2idx_article, idx_article2id_artircle
